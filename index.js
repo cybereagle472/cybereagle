@@ -2,46 +2,53 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const axios = require("axios");
 const fs = require("fs");
 const pino = require("pino");
+const express = require("express");
 
-// --- EAGLEX CONFIGURATION ---
+// --- 1. SOLVE RENDER PORT ISSUE ---
+const app = express();
+const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('EagleX is Active and Online! 🦅'));
+app.listen(PORT, () => console.log(`✅ Port binding successful on: ${PORT}`));
+
+// --- 2. BOT CONFIGURATION ---
 const CONFIG = {
-    name: "EagleX",
-    ownerNumber: "923245115847@s.whatsapp.net", // ⚠️ MUST BE: CountryCodeNumber@s.whatsapp.net
+    ownerNumber: "9779822691613@s.whatsapp.net", // ⚠️ Update this with your exact WhatsApp ID
     aiModel: "google/gemini-2.0-flash-exp:free", 
     systemPrompt: `
         You are EagleX, a professional and chatty personal assistant.
-        - Speak English, Roman Urdu, and Pure Urdu.
-        - Switch languages like a Pakistani human.
-        - You are designed for friends and family.
+        - Speak English, Roman Urdu (Pakistani style), and Pure Urdu.
+        - Switch languages naturally like a human.
+        - Be friendly with friends/family but maintain a professional tone.
+        - You use internet data when asked for news or facts.
     `
 };
 
 let isBotActive = true;
 
 async function startEagleX() {
-    // 1. SESSION DECODE (Reading your Raw Data)
+    // 3. SESSION DECODE (Direct from Environment Variable)
     if (!fs.existsSync('./session/creds.json')) {
-        let rawId = process.env.SESSION_ID || "";
-        let sessionData = rawId.replace("ARSLAN-MD~", "").trim();
+        const rawId = process.env.SESSION_ID || "";
+        const sessionData = rawId.replace("ARSLAN-MD~", "").trim();
         
         if (!sessionData) {
-            console.error("❌ ERROR: SESSION_ID is missing in Render Settings!");
+            console.error("❌ ERROR: SESSION_ID is missing!");
             return;
         }
 
         try {
-            console.log("EagleX: Decoding Session Data...");
+            console.log("EagleX: Decoding session data...");
             const decoded = Buffer.from(sessionData, 'base64').toString('utf-8');
             if (!fs.existsSync('./session')) fs.mkdirSync('./session');
             fs.writeFileSync('./session/creds.json', decoded);
-            console.log("EagleX: Session loaded! ✅");
+            console.log("EagleX: Session file created! ✅");
         } catch (e) {
-            console.error("❌ Session Error: Invalid data format.");
+            console.error("❌ Session Error: Invalid Base64 string.");
             return;
         }
     }
 
-    // 2. WHATSAPP CONNECTION
+    // 4. WHATSAPP CONNECTION
     const { state, saveCreds } = await useMultiFileAuthState('session');
     const sock = makeWASocket({
         auth: state,
@@ -56,11 +63,11 @@ async function startEagleX() {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) startEagleX();
         } else if (connection === 'open') {
-            console.log('EagleX is officially LIVE! 🦅');
+            console.log('🦅 EagleX is officially LIVE on WhatsApp!');
         }
     });
 
-    // 3. MESSAGE HANDLING
+    // 5. MESSAGE HANDLING
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
@@ -68,42 +75,45 @@ async function startEagleX() {
         const sender = msg.key.remoteJid;
         const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").toLowerCase().trim();
         
-        // Use the ID the bot sees to check for Owner
-        const isOwner = sender === CONFIG.ownerNumber;
+        // Log incoming messages for debugging
+        console.log(`📩 New Message from [${sender}]: ${text}`);
 
-        if (isOwner) {
+        // OWNER COMMANDS
+        if (sender === CONFIG.ownerNumber) {
             if (text === ".eagle stop") {
                 isBotActive = false;
-                return await sock.sendMessage(sender, { text: "*EagleX Deactivated.* 🛑" });
+                return await sock.sendMessage(sender, { text: "*EagleX Stopped.* 🛑" });
             }
             if (text === ".eagle start") {
                 isBotActive = true;
-                return await sock.sendMessage(sender, { text: "*EagleX Activated!* 🦅" });
+                return await sock.sendMessage(sender, { text: "*EagleX Started!* 🦅" });
             }
         }
 
-        if (!isBotActive) return;
+        // AI REPLY LOGIC
+        if (isBotActive) {
+            try {
+                await sock.sendPresenceUpdate('composing', sender);
 
-        try {
-            await sock.sendPresenceUpdate('composing', sender);
-            const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-                model: CONFIG.aiModel,
-                messages: [
-                    { role: "system", content: CONFIG.systemPrompt },
-                    { role: "user", content: text }
-                ]
-            }, {
-                headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` }
-            });
+                const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+                    model: CONFIG.aiModel,
+                    messages: [
+                        { role: "system", content: CONFIG.systemPrompt },
+                        { role: "user", content: text }
+                    ]
+                }, {
+                    headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` }
+                });
 
-            const aiReply = response.data.choices[0].message.content;
-            await sock.sendMessage(sender, { text: aiReply });
-        } catch (err) {
-            console.error("AI Error");
+                const aiReply = response.data.choices[0].message.content;
+                await sock.sendMessage(sender, { text: aiReply });
+            } catch (err) {
+                console.error("❌ AI Error: Check your OpenRouter Key or Model ID.");
+            }
         }
     });
 }
 
 // Start the process
 startEagleX();
-            
+                
