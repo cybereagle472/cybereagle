@@ -120,6 +120,11 @@ async function startEagleX() {
         }
     });
 }
+// Add this at the very bottom of index.js
+      if (fs.existsSync('./session')) {
+           fs.rmSync('./session', { recursive: true, force: true });
+              console.log("[SYSTEM] Old session folder wiped for fresh start.");
+}
 
 startEagleX();
             
