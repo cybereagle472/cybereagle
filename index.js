@@ -13,7 +13,7 @@ app.listen(PORT, () => console.log(`✅ Port binding successful on: ${PORT}`));
 // --- 2. BOT CONFIGURATION ---
 const CONFIG = {
     ownerNumber: "9779822691613@s.whatsapp.net", // ⚠️ Update this with your exact WhatsApp ID
-    aiModel: "google/gemini-2.0-flash-exp:free", 
+    aiModel: "z-ai/glm-4.5-air:free", 
     systemPrompt: `
         You are EagleX, a professional and chatty personal assistant.
         - Speak English, Roman Urdu (Pakistani style), and Pure Urdu.
