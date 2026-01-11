@@ -4,116 +4,122 @@ const fs = require("fs");
 const pino = require("pino");
 const express = require("express");
 
-// --- 1. SOLVE RENDER PORT ISSUE ---
+// --- 1. RENDER KEEP-ALIVE SYSTEM ---
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('EagleX is Active and Online! 🦅'));
-app.listen(PORT, () => console.log(`✅ Port binding successful on: ${PORT}`));
+app.get('/', (req, res) => res.send('EagleX Status: 🟢 Fully Operational'));
+app.listen(PORT, () => console.log(`[SYSTEM] Port ${PORT} opened. Render monitoring active.`));
 
-// --- 2. BOT CONFIGURATION ---
+// --- 2. CONFIGURATION ---
 const CONFIG = {
-    ownerNumber: "9779822691613@s.whatsapp.net", // ⚠️ Update this with your exact WhatsApp ID
-    aiModel: "z-ai/glm-4.5-air:free", 
+    ownerNumber: "9779822691613@s.whatsapp.net", // ⚠️ CHANGE TO YOUR ID
+    aiModel: "z-ai/glm-4.5-air:free",
     systemPrompt: `
-        You are EagleX, a professional and chatty personal assistant.
-        - Speak English, Roman Urdu (Pakistani style), and Pure Urdu.
-        - Switch languages naturally like a human.
-        - Be friendly with friends/family but maintain a professional tone.
-        - You use internet data when asked for news or facts.
+        Identity: You are EagleX, a world-class AI Personal Assistant.
+        Owner: Your owner is [Your Name]. Be loyal and protective.
+        Behavior: Professional, efficient, and intelligent.
+        Language: Fluent in English, Urdu, and Roman Urdu. Switch naturally.
+        Instructions: Provide high-quality reasoning. Do not show internal tags or <reasoning> blocks.
     `
 };
 
 let isBotActive = true;
 
 async function startEagleX() {
-    // 3. SESSION DECODE (Direct from Environment Variable)
+    console.log("[STARTUP] Initializing EagleX Engine...");
+
+    // Session Management
     if (!fs.existsSync('./session/creds.json')) {
+        console.log("[SESSION] No credentials found. Decoding from Environment...");
         const rawId = process.env.SESSION_ID || "";
         const sessionData = rawId.replace("ARSLAN-MD~", "").trim();
-        
-        if (!sessionData) {
-            console.error("❌ ERROR: SESSION_ID is missing!");
-            return;
-        }
-
-        try {
-            console.log("EagleX: Decoding session data...");
+        if (sessionData) {
             const decoded = Buffer.from(sessionData, 'base64').toString('utf-8');
             if (!fs.existsSync('./session')) fs.mkdirSync('./session');
             fs.writeFileSync('./session/creds.json', decoded);
-            console.log("EagleX: Session file created! ✅");
-        } catch (e) {
-            console.error("❌ Session Error: Invalid Base64 string.");
-            return;
+            console.log("[SESSION] Credentials successfully written.");
         }
     }
 
-    // 4. WHATSAPP CONNECTION
     const { state, saveCreds } = await useMultiFileAuthState('session');
+    
+    // Create Socket with Higher Debug Level
     const sock = makeWASocket({
         auth: state,
-        logger: pino({ level: 'silent' })
+        logger: pino({ level: 'info' }), // Shows connection handshakes in logs
+        printQRInTerminal: false
     });
 
     sock.ev.on('creds.update', saveCreds);
 
+    // Connection Watchdog
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) startEagleX();
-        } else if (connection === 'open') {
-            console.log('🦅 EagleX is officially LIVE on WhatsApp!');
+        if (connection === 'open') {
+            console.log("✅ [CONNECTED] EagleX is now live on WhatsApp.");
+        } else if (connection === 'close') {
+            const code = lastDisconnect?.error?.output?.statusCode;
+            console.log(`❌ [DISCONNECTED] Code: ${code}. Reconnecting...`);
+            if (code !== DisconnectReason.loggedOut) startEagleX();
         }
     });
 
-    // 5. MESSAGE HANDLING
+    // Message Processor
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
         const sender = msg.key.remoteJid;
-        const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").toLowerCase().trim();
+        const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
         
-        // Log incoming messages for debugging
-        console.log(`📩 New Message from [${sender}]: ${text}`);
+        // DEBUG: Print every message to Render logs
+        console.log(`📩 [INCOMING] From: ${sender} | Text: "${text}"`);
 
-        // OWNER COMMANDS
+        // Owner Command Logic
         if (sender === CONFIG.ownerNumber) {
-            if (text === ".eagle stop") {
+            if (text.toLowerCase() === ".eagle stop") {
                 isBotActive = false;
-                return await sock.sendMessage(sender, { text: "*EagleX Stopped.* 🛑" });
+                return await sock.sendMessage(sender, { text: "⚠️ *EagleX Sleep Mode Activated.*" });
             }
-            if (text === ".eagle start") {
+            if (text.toLowerCase() === ".eagle start") {
                 isBotActive = true;
-                return await sock.sendMessage(sender, { text: "*EagleX Started!* 🦅" });
+                return await sock.sendMessage(sender, { text: "🦅 *EagleX Systems Online.*" });
             }
         }
 
-        // AI REPLY LOGIC
-        if (isBotActive) {
-            try {
-                await sock.sendPresenceUpdate('composing', sender);
+        if (!isBotActive) return;
 
-                const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-                    model: CONFIG.aiModel,
-                    messages: [
-                        { role: "system", content: CONFIG.systemPrompt },
-                        { role: "user", content: text }
-                    ]
-                }, {
-                    headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` }
-                });
+        // AI Processing
+        try {
+            console.log(`🤖 [AI REQUEST] Sending prompt to GLM 4.5 Air...`);
+            await sock.sendPresenceUpdate('composing', sender);
 
-                const aiReply = response.data.choices[0].message.content;
-                await sock.sendMessage(sender, { text: aiReply });
-            } catch (err) {
-                console.error("❌ AI Error: Check your OpenRouter Key or Model ID.");
+            const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+                model: CONFIG.aiModel,
+                messages: [
+                    { role: "system", content: CONFIG.systemPrompt },
+                    { role: "user", content: text }
+                ]
+            }, {
+                headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` },
+                timeout: 30000 // 30 second timeout
+            });
+
+            const aiReply = response.data.choices[0].message.content;
+            console.log(`✅ [AI SUCCESS] Sending response to ${sender}`);
+            await sock.sendMessage(sender, { text: aiReply });
+
+        } catch (err) {
+            const errMsg = err.response?.data?.error?.message || err.message;
+            console.error(`❌ [AI ERROR] ${errMsg}`);
+            
+            // Send error notification to owner
+            if (sender !== CONFIG.ownerNumber) {
+                await sock.sendMessage(CONFIG.ownerNumber, { text: `⚠️ *Bot Alert:* AI Failed for ${sender}. Error: ${errMsg}` });
             }
         }
     });
 }
 
-// Start the process
 startEagleX();
-                
+            
