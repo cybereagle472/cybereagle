@@ -1,21 +1,27 @@
-const { default: makeWASocket, useMultiFileAuthState, delay } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const axios = require("axios");
 const { File } = require("megajs");
 const fs = require("fs");
 const pino = require("pino");
 
-// --- CUSTOMIZE YOUR DATA HERE ---
-const MY_CONFIG = {
-    assistantName: "EagleX",
-    ownerName: "Muhammad Nasir",
-    myNumber: "923245115847@s.whatsapp.net", // Replace with your number
-    systemPrompt: `You are Jarvis, the personal assistant of [Muhammad Nasir]. 
-    Knowledge: You know that your master is a developer and likes coffee. 
-    Tone: Professional, helpful, and concise and sometimes funny as a Pakistani boy.`
+// --- CUSTOM CONFIGURATION ---
+const CONFIG = {
+    name: "EagleX",
+    ownerNumber: "923245115847@s.whatsapp.net", // REPLACE WITH YOUR ID
+    customData: `
+        - You are EagleX, a professional yet chatty personal assistant.
+        - Your owner is [Muhammad Nasir].
+        - You speak English, Roman Urdu (e.g., "Kya hal hai?"), and Pure Urdu perfectly.
+        - You change your behavior based on who you are talking to (friends, family, or relatives).
+        - You use a natural human accent, not a robotic one.
+        - You can search the internet for info if needed (ask the user to wait a moment).
+    `
 };
 
-async function startAssistant() {
-    // Convert Session ID (from Arslan-MD) to credentials
+// State variable to track if the bot is active
+let isBotActive = true;
+
+async function startEagleX() {
     if (!fs.existsSync('./session/creds.json')) {
         const sessionID = process.env.SESSION_ID.replace("Arslan-MD~", "");
         try {
@@ -25,15 +31,11 @@ async function startAssistant() {
             for await (const chunk of stream) data += chunk.toString();
             if (!fs.existsSync('./session')) fs.mkdirSync('./session');
             fs.writeFileSync('./session/creds.json', data);
-        } catch (e) { console.log("Invalid Session ID. Check your Render Environment variables."); return; }
+        } catch (e) { console.log("Session Error"); return; }
     }
 
     const { state, saveCreds } = await useMultiFileAuthState('session');
-    const sock = makeWASocket({
-        auth: state,
-        logger: pino({ level: 'silent' })
-    });
-
+    const sock = makeWASocket({ auth: state, logger: pino({ level: 'silent' }) });
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
@@ -41,32 +43,45 @@ async function startAssistant() {
         if (!msg.message || msg.key.fromMe) return;
 
         const sender = msg.key.remoteJid;
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+        const isOwner = sender === CONFIG.ownerNumber;
 
-        // SECURITY: Only reply to YOU (the owner)
-        if (sender !== MY_CONFIG.myNumber) return;
+        // --- COMMANDS (ONLY FOR YOU) ---
+        if (isOwner) {
+            if (text === ".eagle stop") {
+                isBotActive = false;
+                return await sock.sendMessage(sender, { text: "EagleX has been deactivated. 🛑" });
+            }
+            if (text === ".eagle start") {
+                isBotActive = true;
+                return await sock.sendMessage(sender, { text: "EagleX is now active and ready! 🦅" });
+            }
+        }
 
+        // If bot is stopped, do nothing
+        if (!isBotActive) return;
+
+        // --- AI CHAT LOGIC ---
         try {
-            // Talk to OpenRouter
             const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
                 model: "google/gemini-2.0-flash-exp:free",
                 messages: [
-                    { role: "system", content: MY_CONFIG.systemPrompt },
+                    { role: "system", content: CONFIG.customData },
                     { role: "user", content: text }
                 ]
             }, {
                 headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` }
             });
 
-            const reply = response.data.choices[0].message.content;
-            await sock.sendMessage(sender, { text: reply });
+            const aiReply = response.data.choices[0].message.content;
+            await sock.sendMessage(sender, { text: aiReply });
         } catch (err) {
-            console.error("AI Error:", err.message);
+            console.error("AI Error");
         }
     });
 
-    console.log("Assistant is active and waiting for your messages!");
+    console.log("EagleX is Live!");
 }
 
-startAssistant();
-              
+startEagleX();
+                                                       
