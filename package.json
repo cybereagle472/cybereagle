@@ -1,11 +1,8 @@
 {
   "name": "eaglex-assistant",
-  "version": "1.0.0",
-  "description": "EagleX WhatsApp AI Assistant",
+  "version": "1.2.0",
+  "description": "EagleX Professional AI",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.6.0",
     "axios": "^1.6.0",
@@ -13,3 +10,4 @@
     "express": "^4.18.2"
   }
 }
+
