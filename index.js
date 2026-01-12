@@ -12,24 +12,26 @@ const axios = require("axios");
 const express = require("express");
 const pino = require("pino");
 
-// --- CONFIG & CONSTANTS ---
+// --- SYSTEM CONFIGURATION ---
 const app = express();
-const MY_NUMBER = "9779822691613"; // Your new number
-const OWNER_JID = `${MY_NUMBER}@s.whatsapp.net`;
-const SESSION_ID = "EagleX_Handshake_5"; // New ID to reset Supabase tables
+const PORT = process.env.PORT || 10000;
+const MY_NUMBER = "923245115847";
+const OWNER_NAME = "Muhammad Nasir";
+const SESSION_ID = "EagleX_Ultra_V1"; 
 
-app.get('/', (req, res) => res.status(200).send("🦅 EagleX Pro Engine: 100% Operational"));
-app.listen(process.env.PORT || 10000);
+// Keep-Alive Web Server
+app.get('/', (req, res) => res.status(200).json({ status: "Active", engine: "EagleX Pro" }));
+app.listen(PORT, () => console.log(`🚀 [System] Monitoring Port ${PORT}`));
 
 async function startEagleX() {
-    console.log("🚀 [EagleX] Booting System & Cloud Sync...");
+    console.log("--------------------------------------------------");
+    console.log("🦅 EAGLEX PRO ENGINE: INITIALIZING CLOUD SYNC...");
+    console.log("--------------------------------------------------");
 
     const pool = new Pool({ 
         connectionString: process.env.DATABASE_URL,
         ssl: { rejectUnauthorized: false },
-        max: 20, 
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        max: 20
     });
 
     try {
@@ -44,109 +46,115 @@ async function startEagleX() {
             },
             printQRInTerminal: false,
             logger: pino({ level: "silent" }),
-            browser: Browsers.ubuntu("Chrome"), // Stable browser string
+            browser: ["Ubuntu", "Chrome", "110.0.5481.177"], // High-compatibility footprint
             syncFullHistory: false,
-            markOnlineOnConnect: true
+            shouldSyncHistoryMessage: () => false
         });
 
+        // Instant Sync to Supabase
         sock.ev.on('creds.update', saveCreds);
 
-        // --- INTELLIGENT CONNECTION HANDLER ---
+        // --- CONNECTION MANAGEMENT ---
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
             if (connection === 'open') {
-                console.log("✅ [EagleX] SUCCESS: SYSTEM ONLINE");
-                await sock.sendMessage(OWNER_JID, { 
-                    text: "🦅 *EagleX Assistant: Online.*\n\nOwner: *Muhammad Nasir*\nSync: *Supabase Cloud*" 
+                console.log("✅ [System] CONNECTION ESTABLISHED: CLOUD STORAGE SYNCED");
+                await sock.sendMessage(`${MY_NUMBER}@s.whatsapp.net`, { 
+                    text: `🦅 *EagleX Ultra Pro V3 Active*\n\nWelcome back, *${OWNER_NAME}*.\nSystem is monitoring all channels.` 
                 });
             }
 
             if (connection === 'close') {
                 const reason = lastDisconnect?.error?.output?.statusCode;
-                const shouldReconnect = reason !== DisconnectReason.loggedOut;
+                console.log(`⚠️ [System] Connection Dropped (Reason: ${reason})`);
                 
-                console.log(`⚠️ Connection Interrupted. Reason: ${reason}. Auto-Healing: ${shouldReconnect}`);
-                
-                if (shouldReconnect) {
-                    setTimeout(() => startEagleX(), 10000);
+                if (reason !== DisconnectReason.loggedOut) {
+                    const retryTime = 5000;
+                    console.log(`🔄 [System] Self-Healing in ${retryTime/1000}s...`);
+                    setTimeout(() => startEagleX(), retryTime);
+                } else {
+                    console.log("‼️ [System] Session Terminated. Manual re-pairing required.");
                 }
             }
 
-            // --- STABLE PAIRING LOGIC (Anti-Desync) ---
+            // --- ADVANCED PAIRING LOGIC (With Visual Alerts) ---
             if (!sock.authState.creds.registered && !qr) {
-                console.log("🛠️ [EagleX] Requesting stable pairing code for " + MY_NUMBER);
+                console.log("🛠️ [Pairing] Handshaking with WhatsApp Servers...");
                 
-                // 20-second delay to ensure database tables are fully ready
-                setTimeout(async () => {
-                    try {
-                        let code = await sock.requestPairingCode(MY_NUMBER);
-                        console.log(`\n🔥 YOUR PAIRING CODE: ${code}\n`);
-                    } catch (err) {
-                        console.log("⏳ WhatsApp Server busy or Connection Closed. Retrying in 30s...");
-                    }
-                }, 20000); 
+                // Allow the socket 12 seconds to stabilize before requesting
+                await delay(12000); 
+
+                try {
+                    const code = await sock.requestPairingCode(MY_NUMBER);
+                    console.log("\n************************************************");
+                    console.log(`🌟 YOUR PAIRING CODE: ${code}`);
+                    console.log("************************************************\n");
+                } catch (err) {
+                    console.log("⏳ [Pairing] Server Busy. Retrying in 25s...");
+                }
             }
         });
 
-        // --- AI HUMAN-LIKE BEHAVIOR ENGINE ---
+        // --- AI INTELLIGENCE & HUMAN-LIKE RESPONSE ---
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const msg = messages[0];
             if (!msg.message || msg.key.fromMe) return;
 
             const sender = msg.key.remoteJid;
-            const body = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+            
+            // Intelligence: Don't reply to status updates or group notifications
+            if (sender === 'status@broadcast') return;
 
-            // 1. Mark message as "Read"
+            // Behavior: Simulate Reading & Typing
             await sock.readMessages([msg.key]);
-
-            // 2. Simulate "Human Presence" (Thinking/Typing)
             await sock.sendPresenceUpdate('composing', sender);
-            await delay(3000); 
 
             try {
-                const aiResponse = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+                const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
                     model: "z-ai/glm-4.5-air:free",
                     messages: [
                         { 
                             role: "system", 
-                            content: `You are EagleX, the personal AI of Muhammad Nasir. You act as 'half of him'. 
-                            Detect the user's language (English/Urdu/Roman Urdu) and respond perfectly in that same style. 
-                            Be professional but direct. If Muhammad Nasir messages you from ${MY_NUMBER}, be ultra-obedient.` 
+                            content: `You are EagleX, the personal AI persona of ${OWNER_NAME}. 
+                            You are his digital twin. Match the user's language (Urdu/English/Roman Urdu). 
+                            Be elite, highly intelligent, and helpful. 
+                            If ${OWNER_NAME} (Number: ${MY_NUMBER}) asks you something, prioritize him instantly.` 
                         },
-                        { role: "user", content: body }
+                        { role: "user", content: text }
                     ]
                 }, { 
-                    headers: { 
-                        "Authorization": `Bearer ${process.env.OPENROUTER_KEY}`,
-                        "Content-Type": "application/json"
-                    },
-                    timeout: 25000 
+                    headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` },
+                    timeout: 20000 
                 });
 
-                const replyText = aiResponse.data.choices[0].message.content;
+                const aiReply = response.data.choices[0].message.content;
 
-                // 3. Send final message
-                await sock.sendMessage(sender, { text: replyText }, { quoted: msg });
+                // Send reply with a slight natural delay
+                await delay(1500);
+                await sock.sendMessage(sender, { text: aiReply }, { quoted: msg });
                 await sock.sendPresenceUpdate('paused', sender);
 
-            } catch (error) {
-                console.error("AI Engine Timeout.");
+            } catch (e) {
+                console.log("⚠️ [AI Engine] Service Interrupted (Timeout or API)");
                 await sock.sendPresenceUpdate('paused', sender);
             }
         });
 
     } catch (err) {
-        console.error("❌ [EagleX] Critical System Error:", err.message);
-        setTimeout(() => startEagleX(), 15000);
+        console.error("❌ [System] Critical Launch Failure:", err.message);
+        setTimeout(() => startEagleX(), 20000);
     }
 }
 
-// Keep-Alive for Render
+// --- ERROR SHIELD ---
 process.on('uncaughtException', (err) => {
-    console.log('RECOVERY:', err.message);
-    setTimeout(() => startEagleX(), 10000);
+    console.log('🛡️ [Shield] Crash Prevented:', err.message);
+    if (!err.message.includes('Mismatched searchParams')) {
+        setTimeout(() => startEagleX(), 10000);
+    }
 });
 
 startEagleX();
-    
+                                                  
