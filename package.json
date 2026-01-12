@@ -1,11 +1,8 @@
 {
-  "name": "eaglex-assistant",
-  "version": "1.2.0",
-  "description": "Professional WhatsApp AI with Cloud Sync",
+  "name": "eaglex-pro-v2",
+  "version": "2.0.0",
+  "description": "EagleX Advanced AI Assistant",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
     "@whiskeysockets/baileys": "latest",
     "postgres-baileys": "latest",
@@ -13,7 +10,6 @@
     "uuid": "^11.0.0",
     "axios": "latest",
     "express": "latest",
-    "pino": "latest",
-    "link-preview-js": "latest"
+    "pino": "latest"
   }
 }
