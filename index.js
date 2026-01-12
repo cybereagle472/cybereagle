@@ -14,9 +14,9 @@ const pino = require("pino");
 
 // --- CONFIG & CONSTANTS ---
 const app = express();
-const MY_NUMBER = "923441675739";
+const MY_NUMBER = "923245115847";
 const OWNER_JID = `${MY_NUMBER}@s.whatsapp.net`;
-const SESSION_ID = "EagleX_Pro_Engine"; 
+const SESSION_ID = "EagleX_V3_Final"; 
 
 app.get('/', (req, res) => res.status(200).send("🦅 EagleX Pro Engine: 100% Operational"));
 app.listen(process.env.PORT || 10000);
@@ -111,7 +111,7 @@ async function startEagleX() {
                             role: "system", 
                             content: `You are EagleX, the personal AI of the Muhammad Nasir. You act as 'half of him'. 
                             Detect the user's language (English/Urdu/Roman Urdu) and respond perfectly in that same style. 
-                            Be professional but direct. If the owner (923441675739) messages you, be ultra-obedient.` 
+                            Be professional but direct. If the owner (923245115847) messages you, be ultra-obedient.` 
                         },
                         { role: "user", content: body }
                     ]
