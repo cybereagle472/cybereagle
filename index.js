@@ -29,7 +29,7 @@ async function startEagleX() {
     const { version } = await fetchLatestBaileysVersion();
     
     // Shared Session ID: Must match what you use in Termux pair.js
-    const { state, saveCreds } = await usePostgreSQLAuthState(pool, "eaglex_pro_max");
+    const { state, saveCreds } = await usePostgreSQLAuthState(pool, "eaglex_session");
     
     const sock = makeWASocket({
         version,
