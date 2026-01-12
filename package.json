@@ -1,17 +1,20 @@
 {
-  "name": "eaglex-v3-pro",
-  "version": "3.0.0",
-  "description": "Muhammad Nasir Digital Twin - Professional Edition",
+  "name": "eaglex-assistant",
+  "version": "1.0.0",
+  "description": "WhatsApp Assistant with PostgreSQL Storage",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "@whiskeysockets/baileys": "^6.6.0",
-    "postgres-baileys": "^1.0.0",
-    "pg": "^8.11.0",
-    "axios": "^1.6.0",
-    "dotenv": "^16.0.0",
-    "pino": "^8.19.0"
+    "postgres-baileys": "^1.5.0",
+    "uuid": "^11.0.0",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
   }
 }
