@@ -1,14 +1,18 @@
 {
   "name": "eaglex-assistant",
-  "version": "1.0.0",
-  "description": "WhatsApp AI Assistant",
+  "version": "1.1.0",
+  "description": "Professional WhatsApp AI with Cloud Sync",
   "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
     "@whiskeysockets/baileys": "latest",
-    "baileys-pg": "^1.1.0",
+    "postgres-baileys": "latest",
     "pg": "^8.11.3",
     "axios": "latest",
     "express": "latest",
-    "pino": "latest"
+    "pino": "latest",
+    "link-preview-js": "latest"
   }
 }
