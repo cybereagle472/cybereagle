@@ -12,36 +12,37 @@ const axios = require("axios");
 const express = require("express");
 const pino = require("pino");
 
-// --- PERSONALIZATION & AI CORE ---
+// --- CORE IDENTITY CONFIG ---
 const OWNER_NAME = "Muhammad Nasir";
 const MY_NUMBER = "923245115847";
-const SESSION_ID = "EagleX_Ultra_Bot"; 
+const SESSION_ID = "EagleX_Final_Ultra_V9"; // Fresh ID to bypass old 408 timeouts
 
-const AI_SYSTEM_PROMPT = `
-You are EagleX, the elite personal AI assistant and "Digital Twin" of ${OWNER_NAME}.
-Your mission is to represent ${OWNER_NAME} with high intelligence, professional wit, and absolute efficiency.
-
-RULES OF BEHAVIOR:
-1. LANGUAGE: Detect the user's language (English, Urdu, or Roman Urdu) and respond perfectly in that same style. 
-2. PERSONALITY: Be direct, helpful, and slightly sophisticated. Do not act like a generic bot.
-3. LOYALTY: If ${OWNER_NAME} (Number: ${MY_NUMBER}) messages you, be ultra-obedient and proactive.
-4. CONCISION: Keep responses short and impactful. Use bullet points for complex info.
-5. EMOJIS: Use professional emojis like 🦅, ⚡, 🛡️, or ✅ sparingly.
-
-If someone asks who you are, say: "I am EagleX, the digital persona of Muhammad Nasir. How can I assist you today?"
+const AI_INSTRUCTIONS = `
+ROLE: You are EagleX, the elite digital twin of ${OWNER_NAME}.
+PERSONALITY: Sophisticated, direct, and highly intelligent. You are not a bot; you are an extension of Nasir's intellect.
+CAPABILITIES:
+1. LANGUAGES: Fluently switch between Urdu, Roman Urdu, and English based on the user's style.
+2. LOYALTY: If ${OWNER_NAME} messages you, prioritize him with absolute obedience.
+3. BEHAVIOR: Use professional emojis (🦅, ⚡, 🛡️) sparingly. Keep responses concise but powerful.
+4. KNOWLEDGE: You are an expert in technology, business, and general assistance.
+5. RESTRICTION: Never mention you are an AI model unless explicitly asked. Always act as Nasir's assistant.
 `;
 
-// --- SERVER SETUP ---
+// --- WEB SERVER FOR RENDER ---
 const app = express();
-app.get('/', (req, res) => res.status(200).send("EagleX Pro Engine: Online"));
+app.get('/', (req, res) => res.status(200).send("🦅 EagleX Pro Engine: Online"));
 app.listen(process.env.PORT || 10000);
 
 async function startEagleX() {
-    // SUPABASE POOLER OPTIMIZATION (Transaction Mode)
+    console.log("--------------------------------------------------");
+    console.log("🦅 EAGLEX PRO: INITIALIZING CLOUD SYNC...");
+    console.log("--------------------------------------------------");
+
+    // Optimized for Supabase Pooler (Port 6543)
     const pool = new Pool({ 
         connectionString: process.env.DATABASE_URL,
         ssl: { rejectUnauthorized: false },
-        max: 3, // Safe limit for Free Tier Pooler
+        max: 3, 
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000,
     });
@@ -64,30 +65,44 @@ async function startEagleX() {
 
         sock.ev.on('creds.update', saveCreds);
 
-        // --- SMART CONNECTION HANDLER ---
+        // --- CONNECTION & PAIRING LOGIC ---
         sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
+            const { connection, lastDisconnect, qr } = update;
 
             if (connection === 'open') {
-                console.log("✅ [EAGLEX] CORE ONLINE");
+                console.log("✅ [System] CLOUD SYNC SUCCESSFUL. ONLINE.");
                 if (!global.isFirstConnect) {
                     await sock.sendMessage(`${MY_NUMBER}@s.whatsapp.net`, { 
-                        text: `🦅 *EagleX Ultra Pro: Fully Synchronized.*\n\nDigital Twin of *${OWNER_NAME}* is now active.` 
+                        text: `🦅 *EagleX Ultra Pro: Online.*\n\nDigital Twin of *${OWNER_NAME}* is active.` 
                     });
                     global.isFirstConnect = true;
                 }
             }
 
+            // AUTO-PAIRING TRIGGER
+            if (!sock.authState.creds.registered && !qr) {
+                console.log("🛠️ [Pairing] Preparing Handshake...");
+                await delay(10000); // 10s stability delay
+                try {
+                    const code = await sock.requestPairingCode(MY_NUMBER);
+                    console.log("\n************************************************");
+                    console.log(`🌟 YOUR PAIRING CODE: ${code}`);
+                    console.log("************************************************\n");
+                } catch (err) {
+                    console.log("⏳ [Pairing] WhatsApp Server busy. Retrying in 20s...");
+                }
+            }
+
             if (connection === 'close') {
                 const reason = lastDisconnect?.error?.output?.statusCode;
+                console.log(`⚠️ Connection Closed (Reason: ${reason})`);
                 if (reason !== DisconnectReason.loggedOut) {
-                    console.log(`🔄 Auto-Healing Connection (Reason: ${reason})...`);
                     setTimeout(() => startEagleX(), 10000);
                 }
             }
         });
 
-        // --- ADVANCED MESSAGE PROCESSING ---
+        // --- AI MESSAGE ENGINE ---
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const msg = messages[0];
             if (!msg.message || msg.key.fromMe) return;
@@ -95,18 +110,18 @@ async function startEagleX() {
             const sender = msg.key.remoteJid;
             const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-            // Behavior Logic: Read -> Wait -> Type -> Send
+            // Human Behavior: Mark Read -> Typing...
             await sock.readMessages([msg.key]);
             await sock.sendPresenceUpdate('composing', sender);
             
-            // Artificial delay to look human (1.5s - 3s)
-            await delay(Math.floor(Math.random() * 1500) + 1500);
+            // Artificial Intelligence Thinking Delay
+            await delay(Math.floor(Math.random() * 2000) + 1500);
 
             try {
                 const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
                     model: "z-ai/glm-4.5-air:free",
                     messages: [
-                        { role: "system", content: AI_SYSTEM_PROMPT },
+                        { role: "system", content: AI_INSTRUCTIONS },
                         { role: "user", content: text }
                     ]
                 }, { 
@@ -120,19 +135,21 @@ async function startEagleX() {
                 await sock.sendPresenceUpdate('paused', sender);
 
             } catch (e) {
-                console.log("⚠️ AI Engine Busy. Sending Fallback...");
+                console.log("⚠️ AI Engine Timeout. Check OpenRouter Credits.");
                 await sock.sendPresenceUpdate('paused', sender);
             }
         });
 
     } catch (err) {
-        console.error("❌ System Error:", err.message);
+        console.error("❌ Critical System Error:", err.message);
         setTimeout(() => startEagleX(), 20000);
     }
 }
 
-// Global Crash Protection
-process.on('uncaughtException', (e) => console.log("🛡️ Crash Blocked:", e.message));
+// Anti-Crash Shield
+process.on('uncaughtException', (e) => {
+    console.log("🛡️ Shield Intercepted:", e.message);
+    if (!e.message.includes('searchParams')) setTimeout(() => startEagleX(), 10000);
+});
 
 startEagleX();
-            
