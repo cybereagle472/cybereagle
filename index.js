@@ -14,18 +14,28 @@ const pino = require("pino");
 
 const app = express();
 const MY_NUMBER = "923245115847";
-const SESSION_ID = "EagleX_Instant_v1"; // New ID for instant reset
+const OWNER_NAME = "Muhammad Nasir";
+const SESSION_ID = "EagleX_Ultra_V10"; // New fresh ID
 
-app.get('/', (req, res) => res.status(200).send("EagleX Pro: Online"));
+// --- AI CUSTOM INSTRUCTIONS & MEMORY ---
+const AI_PROMPT = `You are EagleX, the elite Digital Twin of ${OWNER_NAME}.
+- IDENTITY: You are Nasir's personal assistant. Be professional, direct, and highly intelligent.
+- MEMORY: Always remember you are talking to Nasir's contacts. 
+- LANGUAGE: Detect and mirror the user (English/Urdu/Roman Urdu).
+- STYLE: Use 🦅, ⚡, or 🛡️ rarely. Never act like a generic bot.
+- SPECIAL: If Nasir himself (${MY_NUMBER}) speaks, be ultra-obedient.`;
+
+app.get('/', (req, res) => res.status(200).send("EagleX Pro: Active"));
 app.listen(process.env.PORT || 10000);
 
+// Simple In-Memory Chat History
+const chatMemory = {};
+
 async function startEagleX() {
-    // Optimized for the fastest possible DB response
     const pool = new Pool({ 
         connectionString: process.env.DATABASE_URL,
         ssl: { rejectUnauthorized: false },
-        max: 2,
-        connectionTimeoutMillis: 2000,
+        max: 5,
     });
 
     try {
@@ -40,69 +50,51 @@ async function startEagleX() {
             },
             printQRInTerminal: false,
             logger: pino({ level: "silent" }),
-            browser: Browsers.ubuntu("Chrome"),
-            markOnlineOnConnect: true
+            browser: Browsers.ubuntu("Chrome")
         });
 
         sock.ev.on('creds.update', saveCreds);
 
         sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
-
-            // INSTANT PAIRING TRIGGER - No more long delays
-            if (!sock.authState.creds.registered && !qr) {
-                console.log("⚡ [EagleX] INSTANT HANDSHAKE STARTING...");
-                await delay(3000); // Small 3s buffer for socket stability
-                try {
-                    const code = await sock.requestPairingCode(MY_NUMBER);
-                    console.log("\n************************************************");
-                    console.log(`🌟 YOUR CODE: ${code}`);
-                    console.log("************************************************\n");
-                } catch (err) {
-                    console.log("❌ Pairing Busy. Restarting...");
-                    startEagleX();
-                }
-            }
-
+            const { connection, lastDisconnect } = update;
             if (connection === 'open') {
-                console.log("✅ [System] SUCCESS: LINKED AND ONLINE");
-                await sock.sendMessage(`${MY_NUMBER}@s.whatsapp.net`, { text: "🦅 *EagleX Online: Handshake Success.*" });
+                console.log("✅ [EAGLEX] CORE ONLINE & SYNCED");
+                await sock.sendMessage(`${MY_NUMBER}@s.whatsapp.net`, { text: "🦅 *EagleX System Online.* Digital Twin Active." });
             }
-
             if (connection === 'close') {
-                const reason = lastDisconnect?.error?.output?.statusCode;
-                if (reason !== DisconnectReason.loggedOut) {
-                    console.log(`🔄 Reconnecting (Reason ${reason})...`);
-                    setTimeout(() => startEagleX(), 5000);
-                }
+                if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startEagleX();
             }
         });
 
-        // Professional AI Handling
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const msg = messages[0];
             if (!msg.message || msg.key.fromMe) return;
             const sender = msg.key.remoteJid;
             const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
-            
+
+            // Memory Logic: Keep track of last 3 messages
+            if (!chatMemory[sender]) chatMemory[sender] = [];
+            chatMemory[sender].push({ role: "user", content: text });
+            if (chatMemory[sender].length > 4) chatMemory[sender].shift();
+
             await sock.sendPresenceUpdate('composing', sender);
             try {
-                const res = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+                const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
                     model: "z-ai/glm-4.5-air:free",
                     messages: [
-                        { role: "system", content: "You are EagleX, Muhammad Nasir's Digital Twin. Speak naturally in his style." },
-                        { role: "user", content: text }
+                        { role: "system", content: AI_PROMPT },
+                        ...chatMemory[sender]
                     ]
                 }, { headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` } });
 
-                await sock.sendMessage(sender, { text: res.data.choices[0].message.content }, { quoted: msg });
+                const aiReply = response.data.choices[0].message.content;
+                chatMemory[sender].push({ role: "assistant", content: aiReply });
+
+                await sock.sendMessage(sender, { text: aiReply }, { quoted: msg });
             } catch (e) { console.log("AI Error"); }
         });
 
-    } catch (err) {
-        setTimeout(() => startEagleX(), 10000);
-    }
+    } catch (err) { console.log(err); }
 }
-
 startEagleX();
-    
+            
