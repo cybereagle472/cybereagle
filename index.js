@@ -1,130 +1,105 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, AuthenticationState } = require("@whiskeysockets/baileys");
 const axios = require("axios");
 const fs = require("fs");
 const pino = require("pino");
 const express = require("express");
 
-// --- 1. RENDER KEEP-ALIVE SYSTEM ---
+// 1. WEB SERVER TO KEEP RENDER HAPPY
 const app = express();
-const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('EagleX Status: 🟢 Fully Operational'));
-app.listen(PORT, () => console.log(`[SYSTEM] Port ${PORT} opened. Render monitoring active.`));
+app.get('/', (req, res) => res.send('EagleX is Active 🦅'));
+app.listen(process.env.PORT || 3000);
 
-// --- 2. CONFIGURATION ---
+// 2. SETTINGS
 const CONFIG = {
-    ownerNumber: "9779822691613@s.whatsapp.net", // ⚠️ CHANGE TO YOUR ID
-    aiModel: "z-ai/glm-4.5-air:free",
-    systemPrompt: `
-        Identity: You are EagleX, a world-class AI Personal Assistant.
-        Owner: Your owner is [Your Name]. Be loyal and protective.
-        Behavior: Professional, efficient, and intelligent.
-        Language: Fluent in English, Urdu, and Roman Urdu. Switch naturally.
-        Instructions: Provide high-quality reasoning. Do not show internal tags or <reasoning> blocks.
-    `
+    owner: "9779822691613@s.whatsapp.net",
+    model: "z-ai/glm-4.5-air:free"
 };
 
-let isBotActive = true;
-
 async function startEagleX() {
-    console.log("[STARTUP] Initializing EagleX Engine...");
+    console.log("🚀 Powering up EagleX...");
 
-    // Session Management
-    if (!fs.existsSync('./session/creds.json')) {
-        console.log("[SESSION] No credentials found. Decoding from Environment...");
-        const rawId = process.env.SESSION_ID || "";
-        const sessionData = rawId.replace("ARSLAN-MD~", "").trim();
-        if (sessionData) {
-            const decoded = Buffer.from(sessionData, 'base64').toString('utf-8');
-            if (!fs.existsSync('./session')) fs.mkdirSync('./session');
-            fs.writeFileSync('./session/creds.json', decoded);
-            console.log("[SESSION] Credentials successfully written.");
-        }
+    // CLEAN START: Always wipe old session data to prevent Code 405
+    if (fs.existsSync('./session')) {
+        fs.rmSync('./session', { recursive: true, force: true });
+    }
+    fs.mkdirSync('./session');
+
+    // DECODE SESSION FROM ENV
+    const rawId = process.env.SESSION_ID || "";
+    const sessionData = rawId.replace("ARSLAN-MD~", "").trim();
+    
+    if (!sessionData) {
+        console.error("❌ NO SESSION_ID FOUND IN RENDER ENV!");
+        return;
+    }
+
+    try {
+        const decoded = Buffer.from(sessionData, 'base64').toString('utf-8');
+        fs.writeFileSync('./session/creds.json', decoded);
+    } catch (e) {
+        console.error("❌ SESSION_ID IS INVALID BASE64!");
+        return;
     }
 
     const { state, saveCreds } = await useMultiFileAuthState('session');
-    
-    // Create Socket with Higher Debug Level
+
     const sock = makeWASocket({
         auth: state,
-        logger: pino({ level: 'info' }), // Shows connection handshakes in logs
-        printQRInTerminal: false
+        logger: pino({ level: 'silent' }), // Silent to avoid log clutter
+        printQRInTerminal: false,
+        browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Connection Watchdog
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
+        
         if (connection === 'open') {
-            console.log("✅ [CONNECTED] EagleX is now live on WhatsApp.");
-        } else if (connection === 'close') {
-            const code = lastDisconnect?.error?.output?.statusCode;
-            console.log(`❌ [DISCONNECTED] Code: ${code}. Reconnecting...`);
-            if (code !== DisconnectReason.loggedOut) startEagleX();
+            console.log("✅ EAGLEX IS LIVE!");
+            await sock.sendMessage(CONFIG.owner, { text: "🦅 *EagleX is back online and ready!*" });
+        }
+
+        if (connection === 'close') {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            console.log("❌ Connection lost. Reason:", reason);
+            
+            // If the session is totally dead (401 or 405), we stop to avoid loops
+            if (reason === DisconnectReason.loggedOut || reason === 405) {
+                console.error("‼️ SESSION EXPIRED. GET A NEW CODE FROM PAIRING SITE.");
+            } else {
+                startEagleX(); // Reconnect for temporary glitches
+            }
         }
     });
 
-    // Message Processor
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
         const sender = msg.key.remoteJid;
-        const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
         
-        // DEBUG: Print every message to Render logs
-        console.log(`📩 [INCOMING] From: ${sender} | Text: "${text}"`);
+        console.log(`📩 Message from ${sender}: ${text}`);
 
-        // Owner Command Logic
-        if (sender === CONFIG.ownerNumber) {
-            if (text.toLowerCase() === ".eagle stop") {
-                isBotActive = false;
-                return await sock.sendMessage(sender, { text: "⚠️ *EagleX Sleep Mode Activated.*" });
-            }
-            if (text.toLowerCase() === ".eagle start") {
-                isBotActive = true;
-                return await sock.sendMessage(sender, { text: "🦅 *EagleX Systems Online.*" });
-            }
-        }
-
-        if (!isBotActive) return;
-
-        // AI Processing
         try {
-            console.log(`🤖 [AI REQUEST] Sending prompt to GLM 4.5 Air...`);
-            await sock.sendPresenceUpdate('composing', sender);
-
             const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-                model: CONFIG.aiModel,
+                model: CONFIG.model,
                 messages: [
-                    { role: "system", content: CONFIG.systemPrompt },
+                    { role: "system", content: "You are EagleX, a professional AI assistant. Speak English and Roman Urdu." },
                     { role: "user", content: text }
                 ]
             }, {
-                headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` },
-                timeout: 30000 // 30 second timeout
+                headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` }
             });
 
-            const aiReply = response.data.choices[0].message.content;
-            console.log(`✅ [AI SUCCESS] Sending response to ${sender}`);
-            await sock.sendMessage(sender, { text: aiReply });
-
+            const reply = response.data.choices[0].message.content;
+            await sock.sendMessage(sender, { text: reply });
         } catch (err) {
-            const errMsg = err.response?.data?.error?.message || err.message;
-            console.error(`❌ [AI ERROR] ${errMsg}`);
-            
-            // Send error notification to owner
-            if (sender !== CONFIG.ownerNumber) {
-                await sock.sendMessage(CONFIG.ownerNumber, { text: `⚠️ *Bot Alert:* AI Failed for ${sender}. Error: ${errMsg}` });
-            }
+            console.error("AI Error");
         }
     });
 }
-// Add this at the very bottom of index.js
-      if (fs.existsSync('./session')) {
-           fs.rmSync('./session', { recursive: true, force: true });
-              console.log("[SYSTEM] Old session folder wiped for fresh start.");
-}
 
 startEagleX();
-            
+                                
