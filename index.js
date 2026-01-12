@@ -18,23 +18,23 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const OWNER_JID = process.env.OWNER_NUMBER + "@s.whatsapp.net";
 let botActive = true;
 
-// --- RENDER DUMMY SERVER ---
+// --- RENDER ALIVE SYSTEM ---
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200);
-    res.end("EagleX Pro System: Online");
+    res.end("EagleX Engine: Operational");
 }).listen(PORT, '0.0.0.0');
 
 async function startEagleX() {
     const { version } = await fetchLatestBaileysVersion();
-    // Unique session ID to ensure a clean handshake
+    
+    // Shared Session ID: Must match what you use in Termux pair.js
     const { state, saveCreds } = await usePostgreSQLAuthState(pool, "eaglex_pro_max");
     
     const sock = makeWASocket({
         version,
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: true,
         browser: Browsers.ubuntu("Chrome"),
         markOnlineOnConnect: true,
         syncFullHistory: false
@@ -44,14 +44,22 @@ async function startEagleX() {
 
     sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
+        
         if (connection === "close") {
             const reason = lastDisconnect?.error?.output?.statusCode;
+            console.log(`[SYSTEM] Connection lost. Reason: ${reason}`);
+            
+            // Reconnect if not a logout
             if (reason !== DisconnectReason.loggedOut) {
                 setTimeout(() => startEagleX(), 5000);
+            } else {
+                console.log("❌ Logged out. Please re-pair via Termux.");
             }
         } else if (connection === "open") {
-            console.log("🚀 EagleX Pro is Live! 🤖");
-            await sock.sendMessage(OWNER_JID, { text: "💎 *EagleX Pro Active*\nForwarding: *Targeted*\nGroups: *Ignored*\nStatus: *Online*" });
+            console.log("🚀 EagleX Pro Max is Live on Render! 🤖");
+            await sock.sendMessage(OWNER_JID, { 
+                text: "💎 *EagleX Pro Max Engine Started*\n\nMode: *Cloud-Active*\nSession: *Synced from Database*" 
+            });
         }
     });
 
@@ -60,25 +68,16 @@ async function startEagleX() {
         if (!msg.message || msg.key.fromMe) return;
 
         const sender = msg.key.remoteJid;
-        const isGroup = sender.endsWith("@g.us");
-        
-        // STRICT RULE: No Group Processing
-        if (isGroup) return;
+        if (sender.endsWith("@g.us")) return; // STRICT NO-GROUP RULE
 
         const body = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
         const isOwner = sender === OWNER_JID;
 
-        // 1. Presence Control (Typing & Read)
+        // 1. Presence & Interaction
         await sock.readMessages([msg.key]);
         await sock.sendPresenceUpdate('composing', sender);
 
-        // 2. Owner Admin Commands
-        if (isOwner && body.startsWith(".")) {
-            if (body === ".stop") { botActive = false; return sock.sendMessage(sender, { text: "🚫 *AI Paused.*" }); }
-            if (body === ".start") { botActive = true; return sock.sendMessage(sender, { text: "✅ *AI Resumed.*" }); }
-        }
-
-        // 3. View-Once Bypass (.vv)
+        // 2. View-Once Bypass (.vv)
         if (body === ".vv" && msg.message.extendedTextMessage?.contextInfo?.quotedMessage) {
             const quoted = msg.message.extendedTextMessage.contextInfo.quotedMessage;
             const viewOnce = quoted.viewOnceMessageV2?.message || quoted.viewOnceMessage?.message;
@@ -90,41 +89,44 @@ async function startEagleX() {
                 for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
 
                 const mediaKey = mediaType.replace('Message', '');
-                const forwardData = { caption: "🔓 *View-Once Decrypted for you Sir*" };
-                forwardData[mediaKey] = buffer;
-                return await sock.sendMessage(OWNER_JID, forwardData);
+                return await sock.sendMessage(OWNER_JID, { 
+                    [mediaKey]: buffer, 
+                    caption: "🔓 *View-Once Decrypted for you Sir*" 
+                });
             }
         }
 
-        // 4. Targeted Message Forwarding (Specific to "Tell Nasir/Owner")
-        const lowerBody = body.toLowerCase();
-        const keywords = ["tell nasir", "inform nasir", "tell owner", "inform owner", "to nasir", "tell him"];
-        const needsForwarding = keywords.some(key => lowerBody.includes(key));
-
-        if (!isOwner && needsForwarding) {
-            const forwardNotice = `📌 *Direct Request for Nasir*\nFrom: @${sender.split('@')[0]}\nMessage: ${body}`;
-            await sock.sendMessage(OWNER_JID, { text: forwardNotice, mentions: [sender] });
+        // 3. Admin Commands
+        if (isOwner && body.startsWith(".")) {
+            if (body === ".stop") { botActive = false; return sock.sendMessage(sender, { text: "🚫 *AI Paused.*" }); }
+            if (body === ".start") { botActive = true; return sock.sendMessage(sender, { text: "✅ *AI Resumed.*" }); }
         }
 
-        // 5. AI Chatting (Disabled in Groups)
+        // 4. Targeted Forwarding
+        const lowerBody = body.toLowerCase();
+        const keywords = ["tell nasir", "inform nasir", "tell owner", "inform owner", "to nasir", "tell him"];
+        if (!isOwner && keywords.some(key => lowerBody.includes(key))) {
+            await sock.sendMessage(OWNER_JID, { 
+                text: `📌 *Direct Request for Nasir*\nFrom: @${sender.split('@')[0]}\nMessage: ${body}`,
+                mentions: [sender]
+            });
+        }
+
+        // 5. AI Chatting
         if (!botActive) return;
 
         try {
             const aiResponse = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
                 model: "z-ai/glm-4.5-air:free",
                 messages: [
-                    { role: "system", content: process.env.CUSTOM_PROMPT || "You are Nasir's professional digital twin. Be helpful and polite." },
+                    { role: "system", content: process.env.CUSTOM_PROMPT || "You are Nasir's assistant." },
                     { role: "user", content: body }
                 ]
             }, {
-                headers: { 
-                    "Authorization": `Bearer ${process.env.OPENROUTER_KEY}`,
-                    "Content-Type": "application/json"
-                }
+                headers: { "Authorization": `Bearer ${process.env.OPENROUTER_KEY}` }
             });
 
-            const reply = aiResponse.data.choices[0].message.content;
-            await sock.sendMessage(sender, { text: reply }, { quoted: msg });
+            await sock.sendMessage(sender, { text: aiResponse.data.choices[0].message.content }, { quoted: msg });
         } catch (error) {
             console.error("AI Error:", error.message);
         }
