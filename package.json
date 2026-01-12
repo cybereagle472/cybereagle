@@ -1,13 +1,14 @@
 {
   "name": "eaglex-assistant",
-  "version": "1.2.0",
-  "description": "EagleX Professional AI",
+  "version": "1.0.0",
+  "description": "WhatsApp AI Assistant",
   "main": "index.js",
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.6.0",
-    "axios": "^1.6.0",
-    "pino": "^8.19.0",
-    "express": "^4.18.2"
+    "@whiskeysockets/baileys": "latest",
+    "baileys-pg": "^1.1.0",
+    "pg": "^8.11.3",
+    "axios": "latest",
+    "express": "latest",
+    "pino": "latest"
   }
 }
-
