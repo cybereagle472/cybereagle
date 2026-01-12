@@ -15,9 +15,9 @@ const pino = require("pino");
 // --- SYSTEM CONFIGURATION ---
 const app = express();
 const PORT = process.env.PORT || 10000;
-const MY_NUMBER = "923245115847";
+const MY_NUMBER = "923441675739";
 const OWNER_NAME = "Muhammad Nasir";
-const SESSION_ID = "EagleX_Ultra_V1"; 
+const SESSION_ID = "EagleX_Ultra"; 
 
 // Keep-Alive Web Server
 app.get('/', (req, res) => res.status(200).json({ status: "Active", engine: "EagleX Pro" }));
