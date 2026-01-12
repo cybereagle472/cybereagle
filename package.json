@@ -1,7 +1,6 @@
 {
-  "name": "eaglex-pro-v2",
-  "version": "2.0.0",
-  "description": "EagleX Advanced AI Assistant",
+  "name": "eaglex-ultra-pro",
+  "version": "3.0.0",
   "main": "index.js",
   "dependencies": {
     "@whiskeysockets/baileys": "latest",
