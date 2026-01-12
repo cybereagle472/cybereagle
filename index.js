@@ -11,8 +11,8 @@ app.listen(process.env.PORT || 10000);
 
 // --- 2. CONFIGURATION ---
 const CONFIG = {
-    myNumber: "9779822691613", // Your number for pairing
-    owner: "9779822691613@s.whatsapp.net",
+    myNumber: "923441675739", // Your number for pairing
+    owner: "923441675739@s.whatsapp.net",
     model: "z-ai/glm-4.5-air:free",
     systemPrompt: "You are EagleX, a world-class AI Assistant. Speak English and Roman Urdu."
 };
