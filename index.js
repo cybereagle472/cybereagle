@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
-const { PostgresAuthState } = require("postgres-baileys");
+const { usePostgreSQLAuthState } = require("postgres-baileys");
 const { Pool } = require("pg");
 const axios = require("axios");
 const pino = require("pino");
@@ -11,7 +11,7 @@ let botActive = true;
 
 async function startEagleX() {
     const { version } = await fetchLatestBaileysVersion();
-    const { state, saveCreds } = await PostgresAuthState(pool, "eaglex_session");
+    const { state, saveCreds } = await usePostgreSQLAuthState(pool, "eaglex_session");
     
     const sock = makeWASocket({
         version,
