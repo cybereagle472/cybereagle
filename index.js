@@ -14,8 +14,8 @@ const pino = require("pino");
 
 // --- PERSONALIZATION & AI CORE ---
 const OWNER_NAME = "Muhammad Nasir";
-const MY_NUMBER = "9779822691613";
-const SESSION_ID = "EagleX_UltraPro_1"; 
+const MY_NUMBER = "923245115847";
+const SESSION_ID = "EagleX_Ultra_Bot"; 
 
 const AI_SYSTEM_PROMPT = `
 You are EagleX, the elite personal AI assistant and "Digital Twin" of ${OWNER_NAME}.
