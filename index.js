@@ -14,9 +14,9 @@ const pino = require("pino");
 
 // --- CONFIG & CONSTANTS ---
 const app = express();
-const MY_NUMBER = "923245115847"; // Your new number
+const MY_NUMBER = "9779822691613"; // Your new number
 const OWNER_JID = `${MY_NUMBER}@s.whatsapp.net`;
-const SESSION_ID = "EagleX_Final_Handshake_V4"; // New ID to reset Supabase tables
+const SESSION_ID = "EagleX_Handshake_5"; // New ID to reset Supabase tables
 
 app.get('/', (req, res) => res.status(200).send("🦅 EagleX Pro Engine: 100% Operational"));
 app.listen(process.env.PORT || 10000);
