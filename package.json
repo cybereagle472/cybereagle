@@ -1,14 +1,15 @@
 {
-  "name": "eaglex-ultra-pro",
-  "version": "3.0.0",
-  "main": "index.js",
+  "name": "nasir-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "24/7 WhatsApp AI Assistant for Muhammad Nasir",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
   "dependencies": {
-    "@whiskeysockets/baileys": "latest",
-    "postgres-baileys": "latest",
-    "pg": "^8.11.3",
-    "uuid": "^11.0.0",
-    "axios": "latest",
-    "express": "latest",
-    "pino": "latest"
+    "@whiskeysockets/baileys": "^6.4.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3"
   }
 }
