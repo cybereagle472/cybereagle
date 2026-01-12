@@ -117,7 +117,7 @@ async function startEagleX() {
 
         try {
             const aiResponse = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-                model: "z-ai/glm-4.5-air:free",
+                model: "arcee-ai/trinity-mini:free",
                 messages: [
                     { role: "system", content: process.env.CUSTOM_PROMPT || "You are Nasir's assistant." },
                     { role: "user", content: body }
