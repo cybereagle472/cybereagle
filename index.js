@@ -41,7 +41,6 @@ async function startEagleX() {
     try {
         const { version } = await fetchLatestBaileysVersion();
         
-        // Session Initialization (Using the confirmed log name)
         const { state, saveCreds } = await usePostgreSQLAuthState(pool, "EagleX_Pro");
 
         const sock = makeWASocket({
@@ -69,7 +68,7 @@ async function startEagleX() {
                 }
             } else if (connection === "open") {
                 console.log("✅ EagleX_Pro is ONLINE!");
-                await sock.sendMessage(OWNER_JID, { text: "✅ *EagleX Pro V3 Connected!*\nDatabase Refreshed Successfully." });
+                await sock.sendMessage(OWNER_JID, { text: "✅ *EagleX Pro V3 Connected!*\nAI Intelligence Activated." });
             }
         });
 
@@ -90,7 +89,7 @@ async function startEagleX() {
             if (isOwner) {
                 if (body === ".stop") { botActive = false; return sock.sendMessage(sender, { text: "🚫 AI Assistant Paused." }); }
                 if (body === ".start") { botActive = true; return sock.sendMessage(sender, { text: "✅ AI Assistant Active." }); }
-                if (body === ".status") return sock.sendMessage(sender, { text: `EagleX Pro Status: Active\nSession: EagleX_Pro\nUUID: ${uuidv4()}` });
+                if (body === ".status") return sock.sendMessage(sender, { text: `EagleX Pro Status: Active\nUUID: ${uuidv4()}` });
             }
 
             if (!botActive || isGroup) return;
@@ -102,29 +101,45 @@ async function startEagleX() {
                 return; 
             }
 
-            // --- 4. Gemini AI Logic ---
-            await sock.sendPresenceUpdate('composing', sender); // Typing Indicator
+            // --- 4. Intelligent AI Logic (Optimized Gemini 1.5 Flash) ---
+            await sock.sendPresenceUpdate('composing', sender); 
 
             try {
+                // Hum 'gemini-1.5-flash' use kar rahe hain jo fastest aur conversational hai
                 const model = genAI.getGenerativeModel({ 
-                    model: "gemini-1.5-flash" 
+                    model: "gemini-1.5-flash",
+                    // Yahan environment variable ki instructions integrate ho rahi hain
+                    systemInstruction: process.env.CUSTOM_PROMPT || "You are a helpful and witty AI assistant."
                 });
 
-                const result = await model.generateContent({
-                    contents: [{ 
-                        role: "user", 
-                        parts: [{ text: (process.env.CUSTOM_PROMPT || "You are Muhammad Nasir") + "\n\nUser: " + body }] 
-                    }]
+                // Chat structure for better conversation flow
+                const chat = model.startChat({
+                    history: [],
+                    generationConfig: {
+                        maxOutputTokens: 1000,
+                    },
                 });
 
+                const result = await chat.sendMessage(body);
                 const aiReply = result.response.text();
 
-                // Human-like delay
-                await delay(2000);
-                await sock.sendMessage(sender, { text: aiReply }, { quoted: msg });
+                if (aiReply) {
+                    await delay(1500); // Natural delay
+                    await sock.sendMessage(sender, { text: aiReply }, { quoted: msg });
+                }
 
             } catch (error) {
                 console.error("AI Error:", error.message);
+                
+                // Fallback Logic: Agar Flash 404 de ya fail ho, to alternate endpoint try karein
+                try {
+                    const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+                    const fbPrompt = `${process.env.CUSTOM_PROMPT}\n\nUser: ${body}`;
+                    const fbResult = await fallbackModel.generateContent(fbPrompt);
+                    await sock.sendMessage(sender, { text: fbResult.response.text() }, { quoted: msg });
+                } catch (e) {
+                    console.log("AI completely failed to respond.");
+                }
             }
         });
 
