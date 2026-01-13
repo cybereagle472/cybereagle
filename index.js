@@ -14,9 +14,10 @@ require('dotenv').config();
   const fs = require("fs");
   const path = require("path");
 
-  // Configuration
-  const OWNER_NUMBER = "923245115847"; // Replace with your actual number
-  const ADMIN_NUMBERS = [OWNER_NUMBER];
+  // Configuration from environment variables
+  const OWNER_NUMBER = process.env.OWNER_NUMBER || "923245115847";
+  const DATABASE_URL = process.env.DATABASE_URL;
+  const CUSTOM_PROMPT = process.env.CUSTOM_PROMPT || "You are Nasir's assistant.";
   const VIEWONCE_FOLDER = __dirname + "/viewonce_media";
 
   // Ensure viewonce folder exists
@@ -31,9 +32,9 @@ require('dotenv').config();
 
   async function startEagleX() {
       const pool = new Pool({
-          connectionString: "postgresql://postgres.wppfrublofcbjaodoufz:CyberEagleX2026@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
+          connectionString: DATABASE_URL
       });
-
+// session ID Name
       const { state, saveCreds } = await usePostgreSQLAuthState(pool, "EagleX_Pro");
 
       const { version } = await fetchLatestBaileysVersion();
@@ -107,7 +108,7 @@ require('dotenv').config();
 
               const sender = msg.key.remoteJid;
               const isGroup = sender.endsWith('@g.us');
-              const isOwner = ADMIN_NUMBERS.includes(sender);
+              const isOwner = sender === OWNER_NUMBER;
 
               // 1. Auto-read messages to simulate active presence
               try {
@@ -329,3 +330,4 @@ require('dotenv').config();
       console.error("Boot Error:", err);
       process.exit(1);
   });
+    
