@@ -18,14 +18,14 @@ const pino = require("pino");
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
 
-// 1. Render Health Check Server (Port 10000)
+// 1. Render Health Check
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('EagleX Pro V3 Running | UUID: ' + uuidv4());
+    res.end('EagleX Pro V3 Running');
 }).listen(PORT);
 
-// 2. Database & API Config
+// 2. Database Config
 const pool = new Pool({ 
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false } 
@@ -40,7 +40,6 @@ async function startEagleX() {
     
     try {
         const { version } = await fetchLatestBaileysVersion();
-        
         const { state, saveCreds } = await usePostgreSQLAuthState(pool, "EagleX_Pro");
 
         const sock = makeWASocket({
@@ -57,22 +56,19 @@ async function startEagleX() {
 
         sock.ev.on("creds.update", saveCreds);
 
-        // Connection Manager
         sock.ev.on("connection.update", async (update) => {
             const { connection, lastDisconnect } = update;
             if (connection === "close") {
                 const reason = lastDisconnect?.error?.output?.statusCode;
-                console.log(`⚠️ Connection closed. Reason: ${reason}. Reconnecting...`);
+                // Reason 440 is a stream error, we just need to reconnect
                 if (reason !== DisconnectReason.loggedOut) {
                     setTimeout(startEagleX, 5000);
                 }
             } else if (connection === "open") {
                 console.log("✅ EagleX_Pro is ONLINE!");
-                await sock.sendMessage(OWNER_JID, { text: "✅ *EagleX Pro V3 Connected!*\nAI Intelligence Activated." });
             }
         });
 
-        // Message Manager
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
             const msg = messages[0];
             if (!msg.message || msg.key.fromMe || type !== 'notify') return;
@@ -80,73 +76,52 @@ async function startEagleX() {
             const sender = msg.key.remoteJid;
             const body = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
             const isOwner = sender === OWNER_JID;
-            const isGroup = sender.endsWith("@g.us");
 
-            // --- 1. Blue Tick (Immediate) ---
             await sock.readMessages([msg.key]);
 
-            // --- 2. Admin Controls ---
             if (isOwner) {
-                if (body === ".stop") { botActive = false; return sock.sendMessage(sender, { text: "🚫 AI Assistant Paused." }); }
-                if (body === ".start") { botActive = true; return sock.sendMessage(sender, { text: "✅ AI Assistant Active." }); }
-                if (body === ".status") return sock.sendMessage(sender, { text: `EagleX Pro Status: Active\nUUID: ${uuidv4()}` });
+                if (body === ".stop") { botActive = false; return sock.sendMessage(sender, { text: "🚫 Paused." }); }
+                if (body === ".start") { botActive = true; return sock.sendMessage(sender, { text: "✅ Active." }); }
             }
 
-            if (!botActive || isGroup) return;
+            if (!botActive || sender.endsWith("@g.us")) return;
 
-            // --- 3. View Once Bypass ---
-            if (msg.message.viewOnceMessageV2 || msg.message.viewOnceMessage) {
-                await sock.sendMessage(OWNER_JID, { text: "📸 *View Once Detected!*" });
-                await sock.sendMessage(OWNER_JID, { forward: msg }, { quoted: msg });
-                return; 
-            }
-
-            // --- 4. Intelligent AI Logic (Optimized Gemini 1.5 Flash) ---
+            // --- AI LOGIC (RE-ENGINEERED) ---
             await sock.sendPresenceUpdate('composing', sender); 
 
             try {
-                // Hum 'gemini-1.5-flash' use kar rahe hain jo fastest aur conversational hai
-                const model = genAI.getGenerativeModel({ 
-                    model: "gemini-1.5-flash",
-                    // Yahan environment variable ki instructions integrate ho rahi hain
-                    systemInstruction: process.env.CUSTOM_PROMPT || "You are a helpful and witty AI assistant."
-                });
+                // Flash 1.5 Latest is the most stable free model
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-                // Chat structure for better conversation flow
-                const chat = model.startChat({
-                    history: [],
-                    generationConfig: {
-                        maxOutputTokens: 1000,
-                    },
-                });
+                // We inject the CUSTOM_PROMPT directly into the prompt to avoid 404/v1beta errors
+                const instruction = process.env.CUSTOM_PROMPT || "You are Muhammad Nasir.";
+                const finalPrompt = `Instructions: ${instruction}\n\nUser Question: ${body}`;
 
-                const result = await chat.sendMessage(body);
+                const result = await model.generateContent(finalPrompt);
                 const aiReply = result.response.text();
 
                 if (aiReply) {
-                    await delay(1500); // Natural delay
+                    await delay(1000);
                     await sock.sendMessage(sender, { text: aiReply }, { quoted: msg });
                 }
 
             } catch (error) {
                 console.error("AI Error:", error.message);
-                
-                // Fallback Logic: Agar Flash 404 de ya fail ho, to alternate endpoint try karein
+                // Last Resort: Direct string fallback if model object fails
                 try {
-                    const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
-                    const fbPrompt = `${process.env.CUSTOM_PROMPT}\n\nUser: ${body}`;
-                    const fbResult = await fallbackModel.generateContent(fbPrompt);
-                    await sock.sendMessage(sender, { text: fbResult.response.text() }, { quoted: msg });
+                    const modelFallback = genAI.getGenerativeModel({ model: "gemini-pro" });
+                    const res = await modelFallback.generateContent(body);
+                    await sock.sendMessage(sender, { text: res.response.text() }, { quoted: msg });
                 } catch (e) {
-                    console.log("AI completely failed to respond.");
+                    console.log("AI Failed.");
                 }
             }
         });
 
     } catch (err) {
-        console.error("Critical Error:", err.message);
         setTimeout(startEagleX, 10000);
     }
 }
 
 startEagleX();
+        
