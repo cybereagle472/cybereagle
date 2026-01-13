@@ -6,8 +6,11 @@ const {
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore
 } = require("@whiskeysockets/baileys");
-// Yahan function ka naam change kiya hai
-const { usePostgresAuthState } = require("postgres-baileys"); 
+
+// --- Safe Import for postgres-baileys ---
+const PostgresAuthStateModule = require("postgres-baileys");
+const PostgresAuthState = PostgresAuthStateModule.default || PostgresAuthStateModule;
+
 const { Pool } = require("pg");
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
 const pino = require("pino");
@@ -15,7 +18,7 @@ const http = require('http');
 const { v4: uuidv4 } = require('uuid');
 
 // --- 1. Render Keep-Alive Server ---
-const PORT = process.env.PORT || 10000; // Render usually uses 10000
+const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('EagleX Pro V3 is Running. Session: EagleX_Pro\n');
@@ -39,8 +42,8 @@ async function startEagleX() {
     try {
         const { version } = await fetchLatestBaileysVersion();
         
-        // Corrected function call here
-        const { state, saveCreds } = await usePostgresAuthState(pool, "EagleX_Pro");
+        // Using the safe import here
+        const { state, saveCreds } = await PostgresAuthState(pool, "EagleX_Pro");
 
         const sock = makeWASocket({
             version,
@@ -63,10 +66,12 @@ async function startEagleX() {
                 const reason = lastDisconnect?.error?.output?.statusCode;
                 const shouldReconnect = reason !== DisconnectReason.loggedOut;
                 console.log(`⚠️ Connection lost. Reconnecting: ${shouldReconnect}`);
-                if (shouldReconnect) startEagleX();
+                if (shouldReconnect) {
+                    setTimeout(startEagleX, 5000);
+                }
             } else if (connection === "open") {
                 console.log("✅ EagleX_Pro is officially ONLINE!");
-                await sock.sendMessage(OWNER_JID, { text: "*EagleX Pro V3 Connect Ho Chuka Hai!* ✅" });
+                await sock.sendMessage(OWNER_JID, { text: "*EagleX Pro V3 Online!* ✅\nEverything is working perfectly." });
             }
         });
 
@@ -80,8 +85,8 @@ async function startEagleX() {
             const isGroup = sender.endsWith("@g.us");
 
             if (isOwner) {
-                if (body === ".stop") { botActive = false; return sock.sendMessage(sender, { text: "🚫 AI Assistant Paused." }); }
-                if (body === ".start") { botActive = true; return sock.sendMessage(sender, { text: "✅ AI Assistant Active." }); }
+                if (body === ".stop") { botActive = false; return sock.sendMessage(sender, { text: "🚫 Assistant Paused." }); }
+                if (body === ".start") { botActive = true; return sock.sendMessage(sender, { text: "✅ Assistant Active." }); }
                 if (body === ".status") return sock.sendMessage(sender, { text: `EagleX Pro is Active.\nID: ${uuidv4()}` });
             }
 
@@ -105,8 +110,7 @@ async function startEagleX() {
 
                 setTimeout(async () => {
                     await sock.sendMessage(sender, { text: aiReply }, { quoted: msg });
-                    await sock.readMessages([msg.key]);
-                }, 1500);
+                }, 1000);
 
             } catch (error) {
                 console.error("AI Error:", error.message);
@@ -114,8 +118,8 @@ async function startEagleX() {
         });
 
     } catch (err) {
-        console.error("Initialization Error:", err);
-        setTimeout(startEagleX, 5000); // Retry after 5s if DB fails
+        console.error("Critical Initialization Error:", err);
+        setTimeout(startEagleX, 10000); // Retry after 10s
     }
 }
 
