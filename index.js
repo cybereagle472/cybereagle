@@ -7,12 +7,8 @@ const {
     makeCacheableSignalKeyStore
 } = require("@whiskeysockets/baileys");
 
-// --- Fixed Import for postgres-baileys v1.5.0 ---
-const PGBaileys = require("postgres-baileys");
-// Debug: Logs mein dikhayega ke library ke paas kya functions hain
-console.log("Module Keys:", Object.keys(PGBaileys));
-
-const usePostgresAuthState = PGBaileys.usePostgresAuthState || PGBaileys.default?.usePostgresAuthState || PGBaileys.default || PGBaileys;
+// --- FIXED: Using the exact name from your logs ---
+const { usePostgreSQLAuthState } = require("postgres-baileys"); 
 
 const { Pool } = require("pg");
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
@@ -20,32 +16,34 @@ const pino = require("pino");
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
 
-// --- 1. Render Keep-Alive Server ---
+// 1. Render Keep-Alive Server (Port 10000)
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('EagleX Pro V3 Running | Session: EagleX_Pro\n');
-}).listen(PORT);
+    res.end('EagleX Pro V3 is Online | Session: EagleX_Pro\n');
+}).listen(PORT, () => {
+    console.log(`✅ Render Health Check Server active on port ${PORT}`);
+});
 
-// --- 2. Configurations ---
+// 2. Database Connection (PostgreSQL)
 const pool = new Pool({ 
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false } 
 });
 
+// 3. AI Configuration (Gemini)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const OWNER_JID = process.env.OWNER_NUMBER + "@s.whatsapp.net";
 let botActive = true;
 
-// --- 3. Main Bot Logic ---
 async function startEagleX() {
     console.log("🔄 Initializing Session: EagleX_Pro...");
     
     try {
         const { version } = await fetchLatestBaileysVersion();
         
-        // Session Initialization
-        const { state, saveCreds } = await usePostgresAuthState(pool, "EagleX_Pro");
+        // Corrected based on your specific module logs
+        const { state, saveCreds } = await usePostgreSQLAuthState(pool, "EagleX_Pro");
 
         const sock = makeWASocket({
             version,
@@ -54,62 +52,83 @@ async function startEagleX() {
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
             },
             logger: pino({ level: 'silent' }),
+            printQRInTerminal: false,
             browser: Browsers.ubuntu("Chrome"),
             markOnlineOnConnect: true
         });
 
         sock.ev.on("creds.update", saveCreds);
 
+        // Connection Handling
         sock.ev.on("connection.update", async (update) => {
             const { connection, lastDisconnect } = update;
             if (connection === "close") {
                 const reason = lastDisconnect?.error?.output?.statusCode;
-                console.log(`⚠️ Connection closed. Reason: ${reason}`);
-                if (reason !== DisconnectReason.loggedOut) {
-                    setTimeout(startEagleX, 5000);
+                const shouldReconnect = reason !== DisconnectReason.loggedOut;
+                console.log(`⚠️ Connection closed (Reason: ${reason}). Reconnecting: ${shouldReconnect}`);
+                if (shouldReconnect) {
+                    setTimeout(startEagleX, 5000); // 5 sec wait before reconnect
                 }
             } else if (connection === "open") {
-                console.log("✅ EagleX_Pro is ONLINE!");
-                await sock.sendMessage(OWNER_JID, { text: "✅ *EagleX Pro Connected Successfully!*" });
+                console.log("✅ EagleX_Pro is now ONLINE!");
+                await sock.sendMessage(OWNER_JID, { text: "✅ *EagleX Pro V3 Connect Ho Chuka Hai!*" });
             }
         });
 
+        // Message Handling
         sock.ev.on("messages.upsert", async ({ messages }) => {
             const msg = messages[0];
             if (!msg.message || msg.key.fromMe) return;
 
             const sender = msg.key.remoteJid;
             const body = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
-            
-            if (sender === OWNER_JID) {
-                if (body === ".status") return sock.sendMessage(sender, { text: `Active | ID: ${uuidv4()}` });
+            const isOwner = sender === OWNER_JID;
+            const isGroup = sender.endsWith("@g.us");
+
+            // --- Admin Commands ---
+            if (isOwner) {
+                if (body === ".stop") { botActive = false; return sock.sendMessage(sender, { text: "🚫 Bot Paused." }); }
+                if (body === ".start") { botActive = true; return sock.sendMessage(sender, { text: "✅ Bot Active." }); }
+                if (body === ".status") return sock.sendMessage(sender, { text: `Status: Active\nID: ${uuidv4()}\nSession: EagleX_Pro` });
             }
 
-            if (!botActive || sender.endsWith("@g.us")) return;
+            if (!botActive || isGroup) return;
 
-            // View Once Bypass
+            // --- View Once Bypass ---
             if (msg.message.viewOnceMessageV2 || msg.message.viewOnceMessage) {
-                await sock.sendMessage(OWNER_JID, { forward: msg });
+                await sock.sendMessage(OWNER_JID, { text: "📸 *View Once Detected:* Forwarding..." });
+                await sock.sendMessage(OWNER_JID, { forward: msg }, { quoted: msg });
             }
 
-            // AI Response
+            // --- Gemini AI Logic ---
+            await sock.sendPresenceUpdate('composing', sender);
+            
             try {
                 const model = genAI.getGenerativeModel({ 
                     model: "gemini-1.5-flash",
-                    systemInstruction: process.env.CUSTOM_PROMPT 
+                    systemInstruction: process.env.CUSTOM_PROMPT || "You are Muhammad Nasir, be witty and helpful."
                 });
+
                 const result = await model.generateContent(body);
-                await sock.sendMessage(sender, { text: result.response.text() }, { quoted: msg });
-            } catch (e) {
-                console.log("Gemini Error:", e.message);
+                const aiReply = result.response.text();
+
+                await sock.sendMessage(sender, { text: aiReply }, { quoted: msg });
+                await sock.readMessages([msg.key]); // Auto-read message
+
+            } catch (error) {
+                console.error("AI Error:", error.message);
             }
         });
 
     } catch (err) {
-        console.error("❌ Fatal Error:", err.message);
+        console.error("Critical Initialization Error:", err.message);
         setTimeout(startEagleX, 10000);
     }
 }
 
+// Global Process Handlers
+process.on('uncaughtException', (err) => console.error('Uncaught:', err));
+process.on('unhandledRejection', (err) => console.error('Unhandled:', err));
+
 startEagleX();
-            
+                
