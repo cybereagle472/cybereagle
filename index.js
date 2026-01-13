@@ -91,7 +91,7 @@ async function startEagleX() {
 
             try {
                 // Flash 1.5 Latest is the most stable free model
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+                const model = genAI.getGenerativeModel({ model: "models/gemini-2.5-flash" });
 
                 // We inject the CUSTOM_PROMPT directly into the prompt to avoid 404/v1beta errors
                 const instruction = process.env.CUSTOM_PROMPT || "You are Muhammad Nasir.";
