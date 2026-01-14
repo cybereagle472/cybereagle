@@ -35,17 +35,66 @@ const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
 });
 
-const OWNER_JID = process.env.OWNER_NUMBER + "@s.whatsapp.net";
+// Validate OWNER_NUMBER at startup
+const OWNER_NUMBER = process.env.OWNER_NUMBER || "";
+const OWNER_JID = OWNER_NUMBER ? (OWNER_NUMBER + "@s.whatsapp.net") : null;
+
+if (!OWNER_NUMBER) {
+    console.error("❌ ERROR: OWNER_NUMBER not set in .env file!");
+} else {
+    console.log(`✅ Owner Number: ${OWNER_NUMBER}`);
+}
+
 const FORWARD_TO_NUMBER = process.env.FORWARD_TO_NUMBER || "";
-const FORWARD_TO_JID = FORWARD_TO_NUMBER ? FORWARD_TO_NUMBER + "@s.whatsapp.net" : null;
+const FORWARD_TO_JID = FORWARD_TO_NUMBER ? (FORWARD_TO_NUMBER + "@s.whatsapp.net") : null;
 let botActive = true;
+
+// Command patterns for instant detection
+const STOP_PATTERNS = /^\.?stop$/i;
+const START_PATTERNS = /^\.?start$/i;
+
+// Command listener function - handles commands instantly
+function handleCommand(messageBody, sender, isOwner, sock, msg) {
+    const cleanBody = messageBody.trim();
+
+    // INSTANT LISTENER: Stop command
+    if (STOP_PATTERNS.test(cleanBody)) {
+        console.log(`\n🛑 STOP COMMAND RECEIVED from ${sender}`);
+        botActive = false;
+
+        // Update presence to offline
+        sock.sendPresenceUpdate('unavailable', sender).catch(() => {});
+
+        // Send confirmation
+        sock.sendMessage(sender, { text: "😴 EagleX slept on. OFF" }).catch(err => {
+            console.error("Failed to send OFF message:", err.message);
+        });
+
+        return true; // Command handled
+    }
+
+    // INSTANT LISTENER: Start command
+    if (START_PATTERNS.test(cleanBody)) {
+        console.log(`\n🚀 START COMMAND RECEIVED from ${sender}`);
+        botActive = true;
+
+        // Update presence to online
+        sock.sendPresenceUpdate('available', sender).catch(() => {});
+
+        // Send confirmation
+        sock.sendMessage(sender, { text: "☀️ EagleX woke up on. ON" }).catch(err => {
+            console.error("Failed to send ON message:", err.message);
+        });
+
+        return true; // Command handled
+    }
+
+    return false; // Not a command
+}
 
 // Validate required environment variables at startup
 if (!process.env.GROQ_API_KEY) {
     console.error("❌ ERROR: GROQ_API_KEY not set in .env file!");
-}
-if (!process.env.OWNER_NUMBER) {
-    console.error("❌ ERROR: OWNER_NUMBER not set in .env file!");
 }
 if (!FORWARD_TO_JID) {
     console.warn("⚠️ WARNING: FORWARD_TO_NUMBER not set. View-once forwarding will not work!");
@@ -316,30 +365,17 @@ async function startEagleX() {
 
             const isOwner = sender === OWNER_JID;
 
-            await sock.readMessages([msg.key]);
+            // INSTANT COMMAND LISTENER - Check commands immediately
+            const commandHandled = handleCommand(body, sender, isOwner, sock, msg);
+            if (commandHandled) return;
 
-            // Start/Stop commands - check before anything else for owner
-            if (isOwner && (body === ".stop" || body === ".start")) {
-                if (body === ".stop") {
-                    botActive = false;
-                    console.log("🔒 EagleX stopped by owner");
-                    try {
-                        await sock.sendPresenceUpdate('unavailable', sender);
-                    } catch (e) {
-                        // Ignore presence error
-                    }
-                    return sock.sendMessage(sender, { text: "😴 EagleX slept on. OFF" });
-                }
-                if (body === ".start") {
-                    botActive = true;
-                    console.log("🔓 EagleX started by owner");
-                    try {
-                        await sock.sendPresenceUpdate('available', sender);
-                    } catch (e) {
-                        // Ignore presence error
-                    }
-                    return sock.sendMessage(sender, { text: "☀️ EagleX woke up on. ON" });
-                }
+            // Only mark messages as seen when bot is ACTIVE
+            if (botActive) {
+                await sock.readMessages([msg.key]);
+                await sock.sendPresenceUpdate('composing', sender);
+            } else {
+                // Bot is OFF - don't show seen, don't show typing
+                return; // Stop processing entirely
             }
 
             // Check if user wants to send message to owner/nasir
@@ -389,10 +425,8 @@ async function startEagleX() {
                 return sock.sendMessage(sender, { text: `✅ Message sent to owner/nasir.` });
             }
 
-            if (!botActive || sender.endsWith("@g.us")) return;
-
-            // Update presence - show typing
-            await sock.sendPresenceUpdate('composing', sender);
+            // Group messages are ignored
+            if (sender.endsWith("@g.us")) return;
 
             try {
                 // Get instruction from environment
