@@ -13,7 +13,7 @@ const { usePostgreSQLAuthState } = require("postgres-baileys");
 const { Pool } = require("pg");
 
 // AI & Utils
-const Groq = require("@groq/groq");
+const Groq = require("groq/groq");
 const pino = require("pino");
 const http = require('http');
 
