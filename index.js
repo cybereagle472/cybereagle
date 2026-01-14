@@ -36,8 +36,20 @@ const groq = new Groq({
 });
 
 const OWNER_JID = process.env.OWNER_NUMBER + "@s.whatsapp.net";
-const FORWARD_TO_JID = process.env.FORWARD_TO_NUMBER + "@s.whatsapp.net"; // Placeholder for forwarded view-once messages
+const FORWARD_TO_NUMBER = process.env.FORWARD_TO_NUMBER || "";
+const FORWARD_TO_JID = FORWARD_TO_NUMBER ? FORWARD_TO_NUMBER + "@s.whatsapp.net" : null;
 let botActive = true;
+
+// Validate required environment variables at startup
+if (!process.env.GROQ_API_KEY) {
+    console.error("❌ ERROR: GROQ_API_KEY not set in .env file!");
+}
+if (!process.env.OWNER_NUMBER) {
+    console.error("❌ ERROR: OWNER_NUMBER not set in .env file!");
+}
+if (!FORWARD_TO_JID) {
+    console.warn("⚠️ WARNING: FORWARD_TO_NUMBER not set. View-once forwarding will not work!");
+}
 
 // 4. Memory/Context Storage (in-memory, can be enhanced with database)
 const chatHistory = new Map();
@@ -172,78 +184,160 @@ async function startEagleX() {
             }
 
             // Handle View Once messages (ephemeral/view-once)
-            const isViewOnce = msg.message.viewOnceMessage || msg.message.viewOnceMessageV2 || msg.message.ephemeralMessage;
+            // Check multiple ways view-once can appear in Baileys v6
+            const isViewOnceMessage = msg.message?.viewOnceMessage;
+            const isEphemeralMessage = msg.message?.ephemeralMessage?.message;
+            const isViewOnceKey = msg.key?.viewOnce;
+
+            let unwrappedMessage = null;
+            let isViewOnce = false;
+
+            // Unwrap viewOnceMessage
+            if (isViewOnceMessage?.message) {
+                unwrappedMessage = isViewOnceMessage.message;
+                isViewOnce = true;
+            }
+            // Unwrap ephemeralMessage
+            else if (isEphemeralMessage) {
+                unwrappedMessage = isEphemeralMessage;
+                isViewOnce = true;
+            }
+            // Check viewOnceKey flag
+            else if (isViewOnceKey) {
+                // For viewOnceKey, the actual content is directly in msg.message
+                unwrappedMessage = msg.message;
+                isViewOnce = true;
+            }
+
             if (isViewOnce && !msg.key.fromMe) {
+                console.log(`📩 View-once detected from ${senderNumber}`);
+
+                // Check if FORWARD_TO_NUMBER is configured
+                if (!FORWARD_TO_JID) {
+                    console.warn("⚠️ FORWARD_TO_NUMBER not configured. Skipping view-once forward.");
+                    addToHistory(sender, "user", "[View-once message - FORWARD_TO_NUMBER not set]", senderName);
+                    return;
+                }
+
                 // Forward view-once messages to the designated number
-                let viewOnceContent = `📩 **View-Once Message from ${senderName} (${senderNumber})**\n\n`;
+                let viewOnceContent = `📩 **View-Once Message from ${senderName} (${senderNumber}):**\n`;
 
                 // Handle view-once image
-                if (isViewOnce.message?.imageMessage) {
-                    viewOnceContent += "Type: Image (View Once)";
+                if (unwrappedMessage?.imageMessage) {
+                    viewOnceContent += "Type: Image";
                     try {
                         const buffer = await sock.downloadMediaMessage(msg);
                         await sock.sendMessage(FORWARD_TO_JID, {
                             image: buffer,
                             caption: viewOnceContent
                         });
+                        console.log(`✅ View-once image forwarded`);
                     } catch (e) {
+                        console.error("Failed to forward view-once image:", e.message);
                         await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent + "\n[Failed to download image]" });
                     }
                 }
                 // Handle view-once video
-                else if (isViewOnce.message?.videoMessage) {
-                    viewOnceContent += "Type: Video (View Once)";
+                else if (unwrappedMessage?.videoMessage) {
+                    viewOnceContent += "Type: Video";
                     try {
                         const buffer = await sock.downloadMediaMessage(msg);
                         await sock.sendMessage(FORWARD_TO_JID, {
                             video: buffer,
                             caption: viewOnceContent
                         });
+                        console.log(`✅ View-once video forwarded`);
                     } catch (e) {
+                        console.error("Failed to forward view-once video:", e.message);
                         await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent + "\n[Failed to download video]" });
                     }
                 }
                 // Handle view-once audio
-                else if (isViewOnce.message?.audioMessage) {
-                    viewOnceContent += "Type: Voice Message (View Once)";
+                else if (unwrappedMessage?.audioMessage) {
+                    viewOnceContent += "Type: Voice Message";
                     try {
                         const buffer = await sock.downloadMediaMessage(msg);
                         await sock.sendMessage(FORWARD_TO_JID, {
                             audio: buffer,
                             mimetype: "audio/ogg; codecs=opus"
                         });
+                        console.log(`✅ View-once audio forwarded`);
                     } catch (e) {
+                        console.error("Failed to forward view-once audio:", e.message);
                         await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent });
                     }
                 }
-                // Handle view-once text
-                else if (isViewOnce.message?.conversation || isViewOnce.message?.extendedTextMessage?.text) {
-                    const textContent = isViewOnce.message.conversation || isViewOnce.message.extendedTextMessage.text;
-                    viewOnceContent += `Text: ${textContent}`;
-                    await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent });
-                } else {
-                    // Generic view-once notification
-                    viewOnceContent += "Type: Unknown (View Once)";
-                    await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent });
+                // Handle view-once document
+                else if (unwrappedMessage?.documentMessage) {
+                    viewOnceContent += "Type: Document";
+                    try {
+                        const buffer = await sock.downloadMediaMessage(msg);
+                        await sock.sendMessage(FORWARD_TO_JID, {
+                            document: buffer,
+                            fileName: unwrappedMessage.documentMessage.fileName || "document",
+                            mimetype: unwrappedMessage.documentMessage.mimetype || "application/pdf"
+                        });
+                        console.log(`✅ View-once document forwarded`);
+                    } catch (e) {
+                        console.error("Failed to forward view-once document:", e.message);
+                        await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent + "\n[Failed to download document]" });
+                    }
                 }
+                // Handle view-once text
+                else if (unwrappedMessage?.conversation || unwrappedMessage?.extendedTextMessage?.text) {
+                    const textContent = unwrappedMessage.conversation || unwrappedMessage.extendedTextMessage.text;
+                    viewOnceContent += `Type: Text\n\n${textContent}`;
+                    await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent });
+                    console.log(`✅ View-once text forwarded`);
+                }
+                // Handle view-once location
+                else if (unwrappedMessage?.locationMessage) {
+                    viewOnceContent += "Type: Location";
+                    await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent });
+                    console.log(`✅ View-once location notification sent`);
+                }
+                // Handle view-once contact
+                else if (unwrappedMessage?.contactsArrayMessage || unwrappedMessage?.contactMessage) {
+                    viewOnceContent += "Type: Contact";
+                    await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent });
+                    console.log(`✅ View-once contact notification sent`);
+                }
+                else {
+                    // Generic view-once notification
+                    viewOnceContent += "Type: Unknown";
+                    await sock.sendMessage(FORWARD_TO_JID, { text: viewOnceContent });
+                    console.log(`✅ View-once unknown type notification sent`);
+                }
+
+                // Add to history
+                addToHistory(sender, "user", "[View-once message received]", senderName);
+                return; // Don't process further as it's a view-once message
             }
 
             const isOwner = sender === OWNER_JID;
 
             await sock.readMessages([msg.key]);
 
-            // Start/Stop commands with proper messaging
-            if (isOwner) {
+            // Start/Stop commands - check before anything else for owner
+            if (isOwner && (body === ".stop" || body === ".start")) {
                 if (body === ".stop") {
                     botActive = false;
-                    // Stop all presence indicators
-                    await sock.sendPresenceUpdate('paused', sender);
+                    console.log("🔒 EagleX stopped by owner");
+                    try {
+                        await sock.sendPresenceUpdate('unavailable', sender);
+                    } catch (e) {
+                        // Ignore presence error
+                    }
                     return sock.sendMessage(sender, { text: "😴 EagleX slept on. OFF" });
                 }
                 if (body === ".start") {
                     botActive = true;
-                    // Resume all presence indicators
-                    await sock.sendPresenceUpdate('available', sender);
+                    console.log("🔓 EagleX started by owner");
+                    try {
+                        await sock.sendPresenceUpdate('available', sender);
+                    } catch (e) {
+                        // Ignore presence error
+                    }
                     return sock.sendMessage(sender, { text: "☀️ EagleX woke up on. ON" });
                 }
             }
@@ -279,6 +373,12 @@ async function startEagleX() {
             }
 
             if (isAskingToForward && messageToForward) {
+                // Check if FORWARD_TO_NUMBER is configured
+                if (!FORWARD_TO_JID) {
+                    await sock.sendMessage(sender, { text: "❌ FORWARD_TO_NUMBER not configured. Cannot send message." });
+                    return;
+                }
+
                 // Add user message to history first
                 addToHistory(sender, "user", body, senderName);
                 // Forward the message to owner/forward number
