@@ -9,3 +9,13 @@ services:
         sync: false
       - key: OWNER_NUMBER
         sync: false
+        - key: OWNER_NAME
+        sync: false
+      - key: BOT_NAME
+        sync: false
+      - key: PREFIX
+        sync: false
+      - key: MODE
+        sync: false
+      - key: RENDER_URL
+        sync: false
