@@ -14,6 +14,7 @@
     "@sl-code-lords/movie-api": "latest",
     "@whiskeysockets/baileys": "v7.0.0-rc.9",
     "fflate" : "latest",
+    "dotenv": "latest",
     "figlet" : "latest",
     "adm-zip": "latest",
     "api-dylux": "latest",
