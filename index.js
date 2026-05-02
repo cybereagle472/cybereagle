@@ -78,7 +78,7 @@ if (!fs.existsSync(CREDS)) {
     process.exit(1);
   }
   
-  const decoded = Buffer.from(session.substring(7), 'base64').toString('utf8');
+  const decoded = Buffer.from(session.substring(11), 'base64').toString('utf8');
   JSON.parse(decoded);
   
   fs.mkdirSync(AUTH_DIR, { recursive: true });
