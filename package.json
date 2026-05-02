@@ -6,8 +6,6 @@
   "scripts": {
     "start": "node index.js",
     "postinstall": "npm rebuild canvas --ignore-scripts || true"
-    "stop": "pm2 stop CyberEagle",
-    "restart": "pm2 restart CyberEagle"
   },
   "dependencies": {
     "@dark-yasiya/news-scrap": "latest",
