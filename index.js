@@ -38,7 +38,7 @@ function loadLocalFiles() {
     console.log(`🔌 Found ${pluginFiles.length} plugin files`);
   }
   
-  // Check for arslan.html
+  // Check for eagle.html
   if (fs.existsSync('./lib/eagle.html')) {
     console.log("✅ eagle.html found in lib folder");
   } else {
@@ -149,7 +149,7 @@ app.get('/', (req, res) => {
   }
 });
 
-app.get('/lib/arslan.html', (req, res) => {
+app.get('/lib/eagle.html', (req, res) => {
   res.redirect('/');
 });
 
@@ -249,7 +249,7 @@ async function connectToWA() {
       
       try {
         // Send to owner with image
-        sock.sendMessage(ownerNumber[0] + '923441675739@s.whatsapp.net', {
+        sock.sendMessage(ownerNumber[0] + '@s.whatsapp.net', {
           image: { url: imageUrl },
           caption: aliveMsg
         }).catch(() => {
