@@ -14,7 +14,7 @@ const axios = require('axios');
 const path = require('path');
 
 // Owner numbers
-const ownerNumber = ["923428204346"];
+const ownerNumber = ["923441675739"];
 
 // ==================== LOCAL FILES LOADER ====================
 function loadLocalFiles() {
@@ -39,10 +39,10 @@ function loadLocalFiles() {
   }
   
   // Check for arslan.html
-  if (fs.existsSync('./lib/arslan.html')) {
-    console.log("✅ arslan.html found in lib folder");
+  if (fs.existsSync('./lib/eagle.html')) {
+    console.log("✅ eagle.html found in lib folder");
   } else {
-    console.log("⚠️ arslan.html not found in lib folder");
+    console.log("⚠️ eagle.html not found in lib folder");
   }
   
   console.log("✅ Local files loaded successfully!");
@@ -249,7 +249,7 @@ async function connectToWA() {
       
       try {
         // Send to owner with image
-        sock.sendMessage(ownerNumber[0] + '923428204346@s.whatsapp.net', {
+        sock.sendMessage(ownerNumber[0] + '923441675739@s.whatsapp.net', {
           image: { url: imageUrl },
           caption: aliveMsg
         }).catch(() => {
