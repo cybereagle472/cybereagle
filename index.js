@@ -120,7 +120,7 @@ const port = process.env.PORT || 9090;
 
 // Serve HTML page
 app.get('/', (req, res) => {
-  const htmlPath = path.join(__dirname, 'lib', 'arslan.html');
+  const htmlPath = path.join(__dirname, 'lib', 'eagle.html');
   if (fs.existsSync(htmlPath)) {
     res.sendFile(htmlPath);
   } else {
