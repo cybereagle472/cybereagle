@@ -644,8 +644,8 @@ cmd({
 async (conn, mek, m, { from }) => {
     try {
         // Owner's contact info
-        const ownerNumber = '+923428204346'; // Replace this with the actual owner number
-        const ownerName = 'Nasir`🎭; // Replace this with the owner's name
+        const ownerNumber = '+923245115847'; // Replace this with the actual owner number
+        const ownerName = 'Nasir 🎭`; // Replace this with the owner's name
         const organization = 'CyberWorld` ; // Optional: replace with the owner's organization
 
         // Create a vCard (contact card) for the owner
@@ -1082,7 +1082,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, isGroup, sen
                         if (!isOwner) return;
                         reply('.sprikynews');
                         break;    
-                        sprikynes
+                    //sprikeys
                     default:
                         reply("Invalid option. Please select a valid option🔴");
                 }
