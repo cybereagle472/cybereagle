@@ -14,7 +14,7 @@ const axios = require('axios');
 const path = require('path');
 
 // Owner numbers
-const ownerNumber = ["923441675739"];
+const ownerNumber = ["923245115847"];
 
 // ==================== LOCAL FILES LOADER ====================
 function loadLocalFiles() {
