@@ -161,7 +161,7 @@ async function getProfilePicture(sock, jid) {
     const ppUrl = await sock.profilePictureUrl(jid, 'image');
     return ppUrl;
   } catch {
-    return 'https://n.uguu.se/BlGoHUJU.jpg'; // Default image
+    return require('./lib/bot').ALIVE_IMG; // Default image
   }
 }
 
@@ -240,12 +240,24 @@ async function connectToWA() {
       }
       
       console.log(`✅ Plugins loaded: ${loadedCount}/${pluginFiles.length}`);
+
+      // Keep-alive presence heartbeat — WhatsApp drops "online" status
+      // within seconds if it isn't refreshed continuously, so a single
+      // presence update per incoming message isn't enough to stay
+      // visibly online. This interval keeps refreshing it as long as
+      // ALWAYS_ONLINE is enabled.
+      if (global.__alwaysOnlineInterval) clearInterval(global.__alwaysOnlineInterval);
+      global.__alwaysOnlineInterval = setInterval(async () => {
+        if (config.ALWAYS_ONLINE === 'true') {
+          await sock.sendPresenceUpdate('available').catch(() => {});
+        }
+      }, 15000);
       
       // Send connection message with image
       const aliveMsg = `*╭──────────────●●►*\n> *CYBEREAGLE IS CONNECTED SUCCESSFULLY*\n\n> *Type ${prefix}menu to view commands*  \n\n*╭⊱✫ CYBER EAGLE 🦅 ✫⊱╮*\n*│✫📂 Bot Name: ${botConfig.BOT_NAME}*\n*│✫🛡️ Owner: ${config.OWNER_NAME}*\n*│✫♻️ Prefix: ${prefix}*\n*│✫🌍 Mode: ${config.MODE}*\n*│✫⏰ Uptime: ${runtime(process.uptime())}*\n*╰──────────────●●►*\n\n> Enjoy Using CYBER EAGLE🦅`;
       
       // Image URL for connection message
-      const imageUrl = 'https://n.uguu.se/BlGoHUJU.jpg';
+      const imageUrl = botConfig.ALIVE_IMG;
       
       try {
         // Send to owner with image
@@ -361,7 +373,7 @@ async function connectToWA() {
           if (settings.goodbye) {
             try {
               // Get user's profile picture
-              const ppUrl = await getProfilePicture(sock, participant).catch(() => 'https://n.uguu.se/BlGoHUJU.jpg');
+              const ppUrl = await getProfilePicture(sock, participant).catch(() => require('./lib/bot').ALIVE_IMG);
               
               // Format goodbye message with variables
               let goodbyeText = settings.goodbyeMsg || DEFAULT_GOODBYE;
