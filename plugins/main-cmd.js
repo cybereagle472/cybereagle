@@ -7,6 +7,7 @@ const axios = require('axios');
 const { fakevCard } = require('../lib/fakevCard');
 const bot = require('../lib/bot')
 const config = require('../setting')
+const { downloadContentFromMessage, getContentType } = require('@whiskeysockets/baileys')
 //========================================About==================================================
 cmd({
     pattern: "about",
@@ -890,6 +891,71 @@ async (conn, mek, m, { from, q, isOwner, reply }) => {
     } catch (e) {
         console.log(e);
         reply(`${e}`);
+    }
+});
+//=================================================View Once===============================================
+cmd({
+    pattern: "viewonce",
+    alias: ["vo", "once"],
+    desc: "Save and resend a view-once photo/video/voice note you replied to",
+    category: "main",
+    use: '.vo (reply to a view-once message)',
+    filename: __filename
+},
+async (conn, mek, m, { from, reply }) => {
+    try {
+        // Use the RAW quoted message (not the pre-processed m.quoted), because
+        // the serializer flattens view-once wrappers in a way that loses the
+        // nested media — we need the untouched contextInfo.quotedMessage here.
+        const rawQuoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage
+            || mek.message?.imageMessage?.contextInfo?.quotedMessage
+            || mek.message?.videoMessage?.contextInfo?.quotedMessage
+            || mek.message?.conversation?.contextInfo?.quotedMessage
+            || m?.msg?.contextInfo?.quotedMessage
+            || null;
+
+        if (!rawQuoted) {
+            return reply('Please reply to a view-once message with .viewonce (or .vo) to save it.');
+        }
+
+        // Unwrap the view-once container to get at the real media message.
+        const viewOnceInner =
+            rawQuoted.viewOnceMessageV2?.message ||
+            rawQuoted.viewOnceMessageV2Extension?.message ||
+            rawQuoted.viewOnceMessage?.message ||
+            null;
+
+        // Fall back to treating the quoted message as already-unwrapped media
+        // (in case it wasn't sent as view-once, or a client already flattened it).
+        const mediaHolder = viewOnceInner || rawQuoted;
+        const mType = getContentType(mediaHolder);
+
+        let mediaType = null;
+        if (mType === 'imageMessage') mediaType = 'image';
+        else if (mType === 'videoMessage') mediaType = 'video';
+        else if (mType === 'audioMessage') mediaType = 'audio';
+
+        if (!mediaType) {
+            return reply('The replied message does not contain any downloadable view-once media.');
+        }
+
+        const mediaMsg = mediaHolder[mType];
+        const stream = await downloadContentFromMessage(mediaMsg, mediaType);
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
+        }
+
+        if (mediaType === 'image') {
+            await conn.sendMessage(from, { image: buffer, caption: '✅ View-once image saved' }, { quoted: mek });
+        } else if (mediaType === 'video') {
+            await conn.sendMessage(from, { video: buffer, caption: '✅ View-once video saved' }, { quoted: mek });
+        } else if (mediaType === 'audio') {
+            await conn.sendMessage(from, { audio: buffer, mimetype: 'audio/mpeg', ptt: true }, { quoted: mek });
+        }
+    } catch (e) {
+        console.log('viewonce error:', e);
+        reply('❌ Failed to save that media. It may have already expired, or the message wasn\'t a view-once message.');
     }
 });
 //=================================================System===============================================
