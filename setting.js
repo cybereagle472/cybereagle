@@ -48,7 +48,7 @@ READ_MESSAGE: process.env.READ_MESSAGE || "false",
 // make true for auto read message
 READ_CMD_ONLY: process.env.READ_CMD_ONLY || "true",
 // Turn true or false for automatic read msgs
-AUTO_REACT: process.env.AUTO_REACT || "false",
+AUTO_REACT: process.env.AUTO_REACT || "true",
 // make this true or false for auto react on all msgs
 ANTI_BAD: process.env.ANTI_BAD || "true",
 // false or true for anti Calls
@@ -64,12 +64,12 @@ AUTO_STICKER: process.env.AUTO_STICKER || "false",
 // make true for automatic stickers 
 AUTO_REPLY: process.env.AUTO_REPLY || "true",
 // make true or false automatic text reply 
-ALWAYS_ONLINE: process.env.ALWAYS_ONLINE || "false",
+ALWAYS_ONLINE: process.env.ALWAYS_ONLINE || "true",
 // maks true for always online 
  //Bot olways offline
 PUBLIC_MODE: process.env.PUBLIC_MODE || "true",
 // make false if want private mod
-AUTO_TYPING: process.env.AUTO_TYPING || "false",
+AUTO_TYPING: process.env.AUTO_TYPING || "true",
 // true for automatic show typing   
 READ_CMD: process.env.READ_CMD || "false",
 // true if want mark commands as read 
@@ -79,12 +79,15 @@ ANTI_VV: process.env.ANTI_VV || "true",
 
 ANTI_BOT: process.env.ANTI_BOT || "true",
 // true for anti once view 
+ANTI_VIEWONCE: process.env.ANTI_VIEWONCE || "true",
 
 ANTI_DELETE: process.env.ANTI_DELETE || "true",
 // true for anti delete 
+ANTI_EDIT: process.env.ANTI_EDIT || "true",
+// true to alert when someone edits a sent message
 ANTI_DELETE_TYPE: process.env.ANTI_DELETE_TYPE || "same", 
 // change it to 'same' if you want to resend deleted message in same chat 
-AUTO_RECORDING: process.env.AUTO_RECORDING || "true",
+AUTO_RECORDING: process.env.AUTO_RECORDING || "false",
 // make it true for auto recoding 
 AUTO_BLOCK: process.env.AUTO_BLOCK || "false"
 // make it true for auto block
