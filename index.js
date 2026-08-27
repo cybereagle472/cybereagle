@@ -5,7 +5,8 @@ const {
   jidNormalizedUser,
   getContentType,
   fetchLatestBaileysVersion,
-  downloadContentFromMessage
+  downloadContentFromMessage,
+  proto
 } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const P = require('pino');
@@ -409,11 +410,16 @@ async function connectToWA() {
 
   // Main message handler
   sock.ev.on('messages.upsert', async (messageUpdate) => {
+    // Process EVERY message in the batch, not just the first one.
+    // WhatsApp can deliver several messages in a single upsert event
+    // (rapid-fire commands, catching up after a reconnect, etc.) —
+    // previously only messageUpdate.messages[0] was ever handled and
+    // the rest were silently dropped. Each message gets its own
+    // try/catch so one bad message can't block the others in the batch.
+    for (const msg of messageUpdate.messages) {
     try {
-      const msg = messageUpdate.messages[0];
-      
       if (!msg || !msg.message) {
-        return;
+        continue;
       }
       
       // ============ STATUS HANDLING (FIXED) ============
@@ -451,7 +457,7 @@ async function connectToWA() {
           } catch (error) {}
         }
         
-        return; // Status messages ko further process nahi karna
+        continue; // Status messages ko further process nahi karna
       }
       
       // Get message type and content
@@ -535,6 +541,58 @@ async function connectToWA() {
           messageStore.delete(firstKey);
         }
       }
+
+      // ============ ANTI VIEW-ONCE ============
+      // Captures view-once photos/videos/voice notes the instant they arrive
+      // (before the recipient can open+auto-delete them) and forwards a
+      // permanent copy to the owner's DM.
+      if (config.ANTI_VIEWONCE === 'true' && !msg.key.fromMe) {
+        try {
+          const viewOnceMsg =
+            msg.message?.viewOnceMessageV2?.message ||
+            msg.message?.viewOnceMessageV2Extension?.message ||
+            msg.message?.viewOnceMessage?.message ||
+            null;
+
+          if (viewOnceMsg) {
+            const vType = getContentType(viewOnceMsg);
+            const mediaMsg = viewOnceMsg[vType];
+
+            let mediaType = null;
+            if (vType === 'imageMessage') mediaType = 'image';
+            else if (vType === 'videoMessage') mediaType = 'video';
+            else if (vType === 'audioMessage') mediaType = 'audio';
+
+            if (mediaType && mediaMsg) {
+              const stream = await downloadContentFromMessage(mediaMsg, mediaType);
+              let buffer = Buffer.from([]);
+              for await (const chunk of stream) {
+                buffer = Buffer.concat([buffer, chunk]);
+              }
+
+              const sendTo = ownerNumber[0] + '@s.whatsapp.net';
+              const senderJid = msg.key.participant || msg.key.remoteJid;
+              const chatType = from.includes('@g.us') ? '👥 Group' : '👤 Private Chat';
+              let groupNameText = from.includes('@g.us') && groupName ? `\n├─❍ *Group:* ${groupName}` : '';
+
+              const caption = `╭──❍ *👁️ ANTI-VIEWONCE ALERT* ❍──╮\n│\n├─❍ *From:* @${senderJid.split('@')[0]}\n├─❍ *Chat Type:* ${chatType}${groupNameText}\n├─❍ *Type:* ${mediaType.toUpperCase()}\n│\n╰──────────────────────❍\n\n> _View-once media saved before it could disappear_ 🤭🔰`;
+
+              if (mediaType === 'image') {
+                await sock.sendMessage(sendTo, { image: buffer, caption, mentions: [senderJid] }).catch(() => {});
+              } else if (mediaType === 'video') {
+                await sock.sendMessage(sendTo, { video: buffer, caption, mentions: [senderJid] }).catch(() => {});
+              } else if (mediaType === 'audio') {
+                await sock.sendMessage(sendTo, { audio: buffer, mimetype: 'audio/mpeg', ptt: true }).catch(() => {});
+                await sock.sendMessage(sendTo, { text: caption, mentions: [senderJid] }).catch(() => {});
+              }
+
+              console.log(`👁️ Anti-viewonce: ${mediaType} saved to inbox`);
+            }
+          }
+        } catch (e) {
+          console.log('Anti-viewonce error:', e.message);
+        }
+      }
       
       // Log command
       if (isCmd) {
@@ -543,7 +601,7 @@ async function connectToWA() {
       
       // ============ MODE HANDLING ============
       if (config.MODE === 'private' && isCmd && !isOwner) {
-        return;
+        continue;
       }
       
       // ============ AUTO REACT ============
@@ -571,7 +629,7 @@ async function connectToWA() {
         // WELCOME ON/OFF
         if (command === 'welcome') {
           if (!isAdmins && !isOwner) {
-            return reply('❌ Only admins can use this command!');
+            reply('❌ Only admins can use this command!'); continue;
           }
           
           const option = args[0]?.toLowerCase();
@@ -594,7 +652,7 @@ async function connectToWA() {
         // GOODBYE ON/OFF
         else if (command === 'goodbye') {
           if (!isAdmins && !isOwner) {
-            return reply('❌ Only admins can use this command!');
+            reply('❌ Only admins can use this command!'); continue;
           }
           
           const option = args[0]?.toLowerCase();
@@ -617,11 +675,11 @@ async function connectToWA() {
         // SET WELCOME MESSAGE
         else if (command === 'setwelcome') {
           if (!isAdmins && !isOwner) {
-            return reply('❌ Only admins can use this command!');
+            reply('❌ Only admins can use this command!'); continue;
           }
           
           if (!q) {
-            return reply(`❌ Please provide a welcome message!\n\nAvailable variables:\n@user - Mention user\n@group - Group name\n@count - Member count\n@desc - Group description\n\nExample:\n.setwelcome Hello @user! Welcome to @group`);
+            reply(`❌ Please provide a welcome message!\n\nAvailable variables:\n@user - Mention user\n@group - Group name\n@count - Member count\n@desc - Group description\n\nExample:\n.setwelcome Hello @user! Welcome to @group`); continue;
           }
           
           groupSetting.welcomeMsg = q;
@@ -633,11 +691,11 @@ async function connectToWA() {
         // SET GOODBYE MESSAGE
         else if (command === 'setgoodbye') {
           if (!isAdmins && !isOwner) {
-            return reply('❌ Only admins can use this command!');
+            reply('❌ Only admins can use this command!'); continue;
           }
           
           if (!q) {
-            return reply(`❌ Please provide a goodbye message!\n\nAvailable variables:\n@user - Mention user\n@group - Group name\n@count - Member count\n\nExample:\n.setgoodbye Goodbye @user! We'll miss you in @group`);
+            reply(`❌ Please provide a goodbye message!\n\nAvailable variables:\n@user - Mention user\n@group - Group name\n@count - Member count\n\nExample:\n.setgoodbye Goodbye @user! We'll miss you in @group`); continue;
           }
           
           groupSetting.goodbyeMsg = q;
@@ -649,7 +707,7 @@ async function connectToWA() {
         // RESET WELCOME
         else if (command === 'resetwelcome') {
           if (!isAdmins && !isOwner) {
-            return reply('❌ Only admins can use this command!');
+            reply('❌ Only admins can use this command!'); continue;
           }
           
           groupSetting.welcomeMsg = DEFAULT_WELCOME;
@@ -661,7 +719,7 @@ async function connectToWA() {
         // RESET GOODBYE
         else if (command === 'resetgoodbye') {
           if (!isAdmins && !isOwner) {
-            return reply('❌ Only admins can use this command!');
+            reply('❌ Only admins can use this command!'); continue;
           }
           
           groupSetting.goodbyeMsg = DEFAULT_GOODBYE;
@@ -673,7 +731,7 @@ async function connectToWA() {
         // SHOW WELCOME SETTINGS
         else if (command === 'welcomesettings' || command === 'wsettings') {
           if (!isAdmins && !isOwner) {
-            return reply('❌ Only admins can use this command!');
+            reply('❌ Only admins can use this command!'); continue;
           }
           
           const settingsMsg = `╭──❍ *WELCOME SETTINGS* ❍──╮
@@ -717,20 +775,20 @@ Commands:
               
               // Check permissions
               if (commandObj.category === 'owner' && !isOwner) {
-                return reply('❌ This command is only for bot owner!');
+                reply('❌ This command is only for bot owner!'); continue;
               }
               
               if (commandObj.category === 'group' && !isGroup) {
-                return reply('❌ This command can only be used in groups!');
+                reply('❌ This command can only be used in groups!'); continue;
               }
               
               if (commandObj.category === 'admin' && !isAdmins && !isOwner) {
-                return reply('❌ This command is only for group admins!');
+                reply('❌ This command is only for group admins!'); continue;
               }
               
               // Check if command is enabled for group
               if (commandObj.pattern === 'antilink' && groupSetting.antilink === false) {
-                return reply('❌ Anti-link is disabled in this group!');
+                reply('❌ Anti-link is disabled in this group!'); continue;
               }
               
               // React if specified
@@ -821,7 +879,7 @@ Commands:
       if (config.ANTI_DELETE === 'true') {
         try {
           if (msg.message?.protocolMessage && msg.message.protocolMessage.type === 0) {
-            if (msg.key.fromMe) return;
+            if (msg.key.fromMe) continue;
             
             const deletedMsgKey = msg.message.protocolMessage.key;
             const deletedMsg = messageStore.get(deletedMsgKey.id);
@@ -902,10 +960,58 @@ Commands:
           console.error("Anti-delete error:", e);
         }
       }
+
+      // ============ ANTI EDIT ============
+      if (config.ANTI_EDIT === 'true') {
+        try {
+          if (
+            msg.message?.protocolMessage &&
+            msg.message.protocolMessage.type === proto.Message.ProtocolMessage.Type.MESSAGE_EDIT
+          ) {
+            if (msg.key.fromMe) continue;
+
+            const editedKey = msg.message.protocolMessage.key;
+            const originalMsg = messageStore.get(editedKey.id);
+            const editedContentMsg = msg.message.protocolMessage.editedMessage;
+
+            if (originalMsg && editedContentMsg) {
+              const editedBy = msg.key.participant || msg.key.remoteJid;
+              const sendTo = ownerNumber[0] + '@s.whatsapp.net';
+
+              const originalType = getContentType(originalMsg.message);
+              let originalText = '';
+              if (originalType === 'conversation') originalText = originalMsg.message.conversation || '';
+              else if (originalType === 'extendedTextMessage') originalText = originalMsg.message.extendedTextMessage?.text || '';
+              else originalText = '(non-text message)';
+
+              const newType = getContentType(editedContentMsg);
+              let newText = '';
+              if (newType === 'conversation') newText = editedContentMsg.conversation || '';
+              else if (newType === 'extendedTextMessage') newText = editedContentMsg.extendedTextMessage?.text || '';
+              else newText = '(non-text message)';
+
+              const chatType = from.includes('@g.us') ? '👥 Group' : '👤 Private Chat';
+              let groupNameText = from.includes('@g.us') && groupName ? `\n├─❍ *Group:* ${groupName}` : '';
+
+              const editMessage = `╭──❍ *✏️ ANTI-EDIT ALERT* ❍──╮\n│\n├─❍ *Edited By:* @${editedBy.split('@')[0]}\n├─❍ *Chat Type:* ${chatType}${groupNameText}\n│\n├─❍ *Original:* \n├─❍ \`${originalText.substring(0, 300)}\`\n│\n├─❍ *Edited To:* \n├─❍ \`${newText.substring(0, 300)}\`\n│\n╰──────────────────────❍\n\n> _Message was edited but CyberEagle caught it_ 🤭🔰`;
+
+              await sock.sendMessage(sendTo, {
+                text: editMessage,
+                mentions: [editedBy]
+              }).catch(() => {});
+
+              console.log(`✏️ Anti-edit: Change logged to inbox`);
+            }
+          }
+        } catch (e) {
+          console.error("Anti-edit error:", e);
+        }
+      }
       
     } catch (error) {
       console.error("❌ Message handler error:", error);
     }
+    } // end for (const msg of messageUpdate.messages)
   });
 }
 
